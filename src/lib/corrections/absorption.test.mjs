@@ -62,7 +62,8 @@ test('BOM בשורה הראשונה מה-DB, שורות LF, ומחיקת תוכ�
   assert.equal(evaluateAbsorption({ content: `﻿${NEW}\nסוף\n` }, bomChange).outcome, ABSORPTION.ABSORBED);
   assert.equal(evaluateAbsorption({ content: `﻿${OLD}\nסוף\n` }, bomChange).outcome, ABSORPTION.PENDING);
   const del = { ...CHANGE, newLine: '' };
-  assert.equal(check([L0, '', '', 'סוף'], del).outcome, ABSORPTION.ABSORBED);
+  // מחיקת תוכן השורה כולה: אין טקסט שמזהה את הפסקה (שורה ריקה נמצאת בכל מקום) — לעולם לא "נקלט" אוטומטית (כלל 6)
+  assert.deepEqual(pick(check([L0, '', '', 'סוף'], del)), [ABSORPTION.CHANGED, 'unlocated_short_empty', 2, false]);
   assert.equal(check([L0, '', OLD, ''], del).outcome, ABSORPTION.PENDING);
   assert.equal(check([L0, 'א', 'ב', '', OLD, ''], del).outcome, ABSORPTION.PENDING, 'שורות ריקות אינן ראיה; המקורית זזה');
   // שורה ריקה שזזה אל היעד אינה ראיה לקליטה כשהמקורית עדיין בסביבה
@@ -163,9 +164,10 @@ test('בלי עיגון, עם הבסיס המלא: "נקלט" רק כשנוסף 
   const split = { ...TCHANGE, base: null };
   assert.deepEqual(pick(evaluateAbsorption(file(main), split, { relocationLines: 50 })), [ABSORPTION.CHANGED, 'relocated_unanchored', null, false], 'בלי הבסיס המלא — ידני');
   assert.deepEqual(pick(evaluateAbsorption(file(main), { ...split, baseLines: base }, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'edit_applied_relocated', 3, false]);
-  // שכן שכבר היה בו הביטוי המתוקן זז אל היעד, והיעד עצמו נכתב בנוסח אחר — הבדיקה הזולה לבדה הייתה "נקלט"
+  // שכן שכבר היה בו הביטוי המתוקן זז אל היעד, והיעד עצמו נכתב בנוסח אחר — הבדיקה הזולה לבדה הייתה "נקלט";
+  // האיתור (כלל 6) מזהה את הפסקה המדווחת עצמה, בנוסח שלישי, ולכן גם בלי הבסיס המלא זה ספק ולא "נקלט"
   const s4 = ['<h1>ספר</h1>', X, T.replace('הלכא', 'הילכתא'), 'סוף'].slice(1);
-  assert.equal(evaluateAbsorption(file(s4), { ...TCHANGE, base: null, lineIndex: 0 }, { relocationLines: 50 }).outcome, ABSORPTION.ABSORBED, 'מגבלת הבדיקה הזולה');
+  assert.deepEqual(pick(evaluateAbsorption(file(s4), { ...TCHANGE, base: null, lineIndex: 0 }, { relocationLines: 50 })).slice(0, 2), [ABSORPTION.CHANGED, 'unlocated_lookalike_unresolved']);
   assert.deepEqual(pick(evaluateAbsorption(file(s4), { ...TCHANGE, base: null, lineIndex: 0, baseLines: [T, X, 'סוף'] }, { relocationLines: 50 })), [ABSORPTION.CHANGED, 'fix_not_new', null, false]);
   // שני מופעים בסביבה: אחד היה בבסיס (השכן), השני חדש (התיקון) — נקלט
   const two = ['<h1>ספר</h1>', X, P1, P2.replace('הלכא', 'הלכה'), 'סוף הפרק'];
@@ -269,9 +271,9 @@ test('C4: בלי הבסיס המלא "נקלט" לא מעוגן הופך ל-chan
   const noBase = qaRun(main, b, QA_LI, b[QA_LI], fixed, { baseReadable: false });
   assert.deepEqual([noBase.outcome, noBase.detail], [ABSORPTION.CHANGED, 'base_required']);
   assert.deepEqual(pick(qaRun(main, b, QA_LI, b[QA_LI], fixed)).slice(0, 2), [ABSORPTION.CHANGED, 'fix_not_new']);
-  // בלי requireBase (פונקציה טהורה, בדיקות קיימות) ההתנהגות הקודמת נשמרת
+  // גם בלי requireBase (פונקציה טהורה): האיתור (כלל 6) מוצא את הפסקה המדווחת בנוסח שלישי — ספק, לא "נקלט"
   const ch = { lineIndex: QA_LI, originalLine: b[QA_LI], newLine: fixed, base: qaNeighbors(b, QA_LI) };
-  assert.equal(evaluateAbsorption({ texts: main }, ch, { relocationLines: QA_R }).outcome, ABSORPTION.ABSORBED);
+  assert.deepEqual(pick(evaluateAbsorption({ texts: main }, ch, { relocationLines: QA_R })).slice(0, 2), [ABSORPTION.CHANGED, 'unlocated_lookalike_unresolved']);
 });
 
 test('C2b: "נקלט" מעוגן בלי הבסיס המלא (לא נקרא) → changed:base_required; עם הבסיס — נקלט', () => {
@@ -318,4 +320,27 @@ test('A: הפסקה המקורית זזה מעבר לחלון ונשארה של�
   // שורת היעד עצמה נקיה אך עריכה (לא שורה שלמה): המקור רחוק בהקשר אחר
   assert.equal(closedPrAction(v, { closedAt: new Date(0), now: new Date(1000), graceSeconds: 10_000 }), CLOSED_PR_ACTION.AWAIT);
   assert.equal(closedPrAction(v, { closedAt: new Date(0), now: new Date(20_000_000), graceSeconds: 10 }), CLOSED_PR_ACTION.HANDOFF_NOT_ABSORBED);
+});
+
+test('R3 (סוקר, סבב 3): הפסקה זזה ומילים ליד הטעות שונו, ושורה אחרת בבסיס כבר נשאה את ההצעה — לא "נקלט"', () => {
+  const b = qaBase();
+  b[QA_LI] = `${qaFill(130)} ${QA_ERR} tail`;
+  b[240] = `${qaFill(240)} ${QA_OK} more`; // שורה אחרת שכבר נושאת את הנוסח המוצע (מחוץ לחלון הבסיס)
+  const fixed = b[QA_LI].replace(QA_ERR, QA_OK);
+  // מנהל הספרייה הזיז את הפסקה ושינה מילים צמודות לטעות — בלי לתקן אותה — ומחק 70 שורות אחריה
+  const moved = b[QA_LI].replace('they nouelin money', 'thei nouelin monei');
+  const main = [...b];
+  main.splice(QA_LI, 71);
+  main.splice(20, 0, moved);
+  for (const baseReadable of [true, false]) {
+    const v = qaRun(main, b, QA_LI, b[QA_LI], fixed, { baseReadable });
+    assert.notEqual(v.outcome, ABSORPTION.ABSORBED, JSON.stringify(v));
+  }
+  assert.deepEqual(pick(qaRun(main, b, QA_LI, b[QA_LI], fixed)).slice(0, 2), [ABSORPTION.CHANGED, 'unlocated_lookalike_unresolved']);
+  // ביקורת: אותה הזזה כשהמילים ליד הטעות שונו וגם הטעות תוקנה — עדיין ספק (המיפוי סביב הטעות אינו ודאי);
+  // הזזה ותיקון בלי עריכה צמודה — נקלט: הפסקה המדווחת עצמה זוהתה ותוקנה, והשורה שכבר נשאה את ההצעה היא תאום מהבסיס
+  const nearFixed = main.map((l) => (l === moved ? moved.replace('nouelin', 'notelin') : l));
+  assert.notEqual(qaRun(nearFixed, b, QA_LI, b[QA_LI], fixed).outcome, ABSORPTION.ABSORBED);
+  const movedFixed = main.map((l) => (l === moved ? fixed : l));
+  assert.equal(qaRun(movedFixed, b, QA_LI, b[QA_LI], fixed).outcome, ABSORPTION.ABSORBED);
 });

@@ -5,6 +5,7 @@
  * שנגזר מהתוצאה ומזמן ההמתנה. הקריאה מ-GitHub והעדכון ב-DB — ב-closed-pr.js.
  */
 import { splitSourceLines } from './source-text.js';
+import { LOCATE, lineIndex, locateEdit } from './locate-edit.js';
 
 export const ABSORPTION = Object.freeze({ ABSORBED: 'absorbed', PENDING: 'pending', CHANGED: 'changed' });
 
@@ -93,6 +94,66 @@ export function fileLines(file) {
   return texts;
 }
 
+// אינדקס סריקה לעותק שורות — נבנה פעם אחת לכל עותק (WeakMap; משותף לכל הדיווחים על אותו קובץ באצווה) ולא לכל
+// דיווח: הטקסט המחובר, גולמי ומנורמל, לחיפוש דפוסים בקובץ כולו בחיפוש אחד, ושורה → מקומות.
+const scanIndexes = new WeakMap();
+function scanIndex(texts) {
+  let ix = scanIndexes.get(texts);
+  if (ix) return ix;
+  const joined = (lines) => {
+    const starts = new Int32Array(lines.length);
+    let off = 1;
+    lines.forEach((t, i) => {
+      starts[i] = off;
+      off += t.length + 1;
+    });
+    return { text: `\n${lines.join('\n')}\n`, starts };
+  };
+  const normed = texts.map(norm);
+  const byLine = new Map();
+  const byNorm = new Map();
+  texts.forEach((t, i) => {
+    if (!byLine.has(t)) byLine.set(t, []);
+    byLine.get(t).push(i);
+    byNorm.set(normed[i], true);
+  });
+  ix = { raw: joined(texts), norm: joined(normed), byLine, byNorm };
+  scanIndexes.set(texts, ix);
+  return ix;
+}
+
+function lineAt(starts, pos) {
+  let lo = 0;
+  let hi = starts.length - 1;
+  let at = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (starts[mid] <= pos) {
+      at = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  return at;
+}
+
+/** occurrences() לכל שורה בבת אחת, בטקסט המחובר: Map שורה → מספר מופעים (רק שורות עם מופע). */
+function occurrencesByLine({ text, starts }, pattern, { atStart, atEnd }) {
+  const out = new Map();
+  const add = (i) => out.set(i, (out.get(i) || 0) + 1);
+  const scan = (needle, lineStartOf) => {
+    for (let k = text.indexOf(needle); k !== -1; k = text.indexOf(needle, k + 1)) {
+      const at = lineStartOf(k);
+      const i = lineAt(starts, at);
+      if (i !== -1 && (!atStart || starts[i] === at)) add(i);
+    }
+  };
+  if (atStart && atEnd) scan(`\n${pattern}\n`, (k) => k + 1);
+  else if (atStart) scan(`\n${pattern}`, (k) => k + 1);
+  else if (atEnd) scan(`${pattern}\n`, (k) => k);
+  else if (pattern) scan(pattern, (k) => k);
+  return out;
+}
+
 /** "אותה שורה": זהה אחרי נרמול רווחים, או — בשורות ארוכות — רוב המילים משותפות. */
 export function sameLine(a, b) {
   const x = norm(a);
@@ -162,6 +223,9 @@ export function anchorTarget(texts, lineIndex, base, range) {
  * - absorbed: התיקון בשורת היעד והמקור לא — והמקור (השורה או העריכה) אינו מופיע בשום מקום בקובץ כולו
  *   (מופע רחוק שנשאר שלם → pending/original_elsewhere). - pending: המקור עדיין שם.
  * - changed: כל השאר — נוסח אחר, עמימות, קובץ חסר או שאינו UTF-8 תקין. ספק = ידני, לעולם לא "נקלט".
+ * כלל 6: כל "נקלט" מותנה גם באיתור (locate-edit.js) — הפסקה המדווחת מזוהה בקובץ בביטחון, ובמקום שהעריכה ממופה
+ * אליו המקור איננו וההצעה ישנה, וכל פסקה דומה בקובץ מתוקנת. not_fixed → pending (original_located); ספק →
+ * changed (unlocated_<סיבה>). הבדיקות שכאן נשארות כתנאים שמרניים נוספים.
  * @param {{content?:string, texts?:string[], lossy?:boolean}|null} file  הקובץ ב-main (null = אינו קיים)
  * @param {{lineIndex:number, originalLine:string, newLine:string, base?:{before:string[], after:string[]}|null, baseLines?:string[]|null}} change
  *   base — שכני שורת היעד בבסיס (לעיגון); baseLines — הקובץ המלא בבסיס, כשידוע (לבדיקה בלי עיגון)
@@ -191,13 +255,20 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
   const exact = (i, text) => texts[i] === text;
   // מספר מופעי התיקון (לא מספר שורות): פיצול פסקה ליד העריכה מגדיל את מספר השורות הנושאות אותו בלי תיקון.
   const appliedPattern = edit.left + edit.inserted + edit.right;
-  const fixIn = (line) => {
-    const n = occurrences(line, appliedPattern, edit);
-    return line === fresh ? Math.max(n, 1) : n;
+  // מופעי התיקון בכל שורה (שורה שהיא ההצעה כולה — לפחות 1), דרך אינדקס הסריקה (פעם אחת לכל עותק בהערכה): רק שורות שיש בהן מופע או שהן ההצעה כולה.
+  const fixMemo = new Map();
+  const fixCounts = (lines) => {
+    if (!fixMemo.has(lines)) {
+      const ix = scanIndex(lines);
+      const m = occurrencesByLine(ix.raw, appliedPattern, edit);
+      for (const i of ix.byLine.get(fresh) || []) m.set(i, Math.max(m.get(i) || 0, 1));
+      fixMemo.set(lines, m);
+    }
+    return fixMemo.get(lines);
   };
   const countFix = (lines, lo, hi) => {
     let n = 0;
-    for (let i = Math.max(0, lo); i <= Math.min(lines.length - 1, hi); i++) n += fixIn(lines[i]);
+    for (const [i, c] of fixCounts(lines)) if (i >= lo && i <= hi) n += c;
     return n;
   };
 
@@ -205,9 +276,26 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
   // ההזזה. פסקה מקורית שזזה רחוק ונשארה שלמה פירושה שהשגיאה עדיין בספר, גם אם נוסח מתוקן אחר קיים בקובץ.
   const normOrig = norm(orig);
   const normEdit = lineEdit(normOrig, norm(fresh), editContext);
-  const stillThere = (state) => state === 'original' || state === 'both';
-  const originalAnywhere = () => texts.some((t) => (normOrig !== '' && norm(t) === normOrig) || stillThere(editState(t, edit)) || stillThere(editState(norm(t), normEdit)));
-  const absorbed = (detail, at) => (originalAnywhere() ? verdict(ABSORPTION.PENDING, 'original_elsewhere', at) : verdict(ABSORPTION.ABSORBED, detail, at));
+  const originalAnywhere = () => {
+    const ix = scanIndex(texts);
+    return (normOrig !== '' && ix.byNorm.has(normOrig))
+      || occurrencesByLine(ix.raw, edit.left + edit.removed + edit.right, edit).size > 0
+      || occurrencesByLine(ix.norm, normEdit.left + normEdit.removed + normEdit.right, normEdit).size > 0;
+  };
+  // הכלל המשותף: הפסקה המדווחת עצמה מזוהה, ובה — במקום העריכה — המקור איננו וההצעה ישנה.
+  const baseLines = Array.isArray(change.baseLines) ? change.baseLines : null;
+  const locate = () => locateEdit({
+    original: orig, proposed: fresh, current: lineIndex(texts),
+    base: baseLines ? { index: lineIndex(baseLines), lineIndex: li } : null,
+    context: change.base ?? (baseLines ? { before: baseLines.slice(Math.max(0, li - ANCHOR_SCAN), li), after: baseLines.slice(li + 1, li + 1 + ANCHOR_SCAN) } : null),
+  });
+  const absorbed = (detail, at) => {
+    if (originalAnywhere()) return verdict(ABSORPTION.PENDING, 'original_elsewhere', at);
+    const loc = locate();
+    if (loc.status === LOCATE.NOT_FIXED) return verdict(ABSORPTION.PENDING, 'original_located', loc.line);
+    if (loc.status !== LOCATE.FIXED) return verdict(ABSORPTION.CHANGED, `unlocated_${loc.reason}`, at);
+    return verdict(ABSORPTION.ABSORBED, detail, at);
+  };
 
   const anchor = anchorTarget(texts, li, change.base, relocationLines);
   if (anchor.at !== undefined) {
@@ -242,7 +330,6 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     if (st === 'original' || st === 'both') near.original.push(i);
     if ((st === 'applied' || st === 'both') && freshIsEvidence) near.applied.push(i);
   }
-  const baseLines = Array.isArray(change.baseLines) ? change.baseLines : null;
   const carriesFix = (line) => line === fresh || ['applied', 'both'].includes(editState(line, edit));
   // חלון רחב יותר בבסיס: שורות שזזו עדיין נספרות כ"היו שם קודם" (כיוון זהיר).
   const addedFix = () => (baseLines ? countFix(texts, from, to) - countFix(baseLines, li - 2 * relocationLines, li + 2 * relocationLines) : null);

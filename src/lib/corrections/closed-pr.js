@@ -18,12 +18,15 @@ import {
 import { currentRevisionOf, logEvent, manualQueueSet } from './store.js';
 
 // גרסת הכלל: תוצאה שמורה מגרסה אחרת אינה ממוחזרת (publish.absorptionCheck.v).
-export const ABSORPTION_RULE_VERSION = 5;
+// 6: כל "נקלט" מותנה באיתור הפסקה המדווחת ובמצב העריכה בה (locate-edit.js).
+export const ABSORPTION_RULE_VERSION = 6;
 // שורות מהבסיס לכל צד כשהבסיס נקרא מקובץ (ולא מההקשר שנשמר באישור).
 const BASE_SPAN = 12;
 const COMMENT_MAX = 500;
 const noBom = (s) => (String(s ?? '').startsWith('﻿') ? String(s).slice(1) : String(s ?? ''));
 const linesOf = (content) => splitSourceLines(content).lines.map((l) => l.text);
+// הערכת הנפח של עותק בסיס מפורק במטמון: השורות, ועליהן האינדקס של locate-edit.js (נרמול, אסימונים ומפות).
+const parsedBytes = (lines) => (lines ? lines.reduce((n, l) => n + l.length, 0) * 8 + lines.length * 96 : 64);
 
 let absorptionCache = null;
 function cacheFor(bytes) {
@@ -93,7 +96,8 @@ export async function closedPrChange(report, { gitSource, head, source, packages
  */
 export function createAbsorptionChecker({ config, deps = {} }) {
   const client = createRepoClient({ repo: config.source.repo, token: config.source.token || null, fetchImpl: deps.githubFetch || fetch });
-  const git = createGitSource({ client, ref: config.source.ref, cache: cacheFor(config.publish.absorptionCacheBytes) });
+  const cache = cacheFor(config.publish.absorptionCacheBytes);
+  const git = createGitSource({ client, ref: config.source.ref, cache });
   const relocationLines = config.publish.absorptionRelocationLines;
   let headPromise = null;
   // כשל בקריאת הראש אינו נשמר: הקריאה הבאה מנסה שוב.
@@ -120,11 +124,25 @@ export function createAbsorptionChecker({ config, deps = {} }) {
     if (!sha && entries && entries.length >= 1000) sha = (await client.getFileMeta(path, commitSha))?.sha || null;
     return sha;
   };
-  const blobLines = (sha) => once(`blob:${sha}`, async () => {
+  // עותקי הבסיס המפורקים (ועליהם האינדקס של locate-edit.js, שנבנה פעם אחת לכל מערך שורות) — במטמון המוגבל
+  // בנפח, לא במפה שגדלה עד סוף ההרצה (migration על הרבה גרסאות בסיס). בקשה זהה בזמן טעינה ממתינה לאותה הבטחה.
+  const loading = new Map();
+  const bounded = (key, fn) => {
+    const hit = cache.get(key);
+    if (hit) return Promise.resolve(hit.lines);
+    if (!loading.has(key)) {
+      loading.set(key, fn().then((lines) => {
+        cache.set(key, { lines }, parsedBytes(lines));
+        return lines;
+      }).finally(() => loading.delete(key)));
+    }
+    return loading.get(key);
+  };
+  const blobLines = (sha) => bounded(`base-lines:${sha}`, async () => {
     const b = await git.loadBlob(sha);
     return b.lossy ? null : linesOf(b.content);
   });
-  const parentLines = (commitSha, path) => once(`parent:${commitSha}:${path}`, async () => {
+  const parentLines = (commitSha, path) => bounded(`parent-lines:${commitSha}:${path}`, async () => {
     const parent = (await client.getCommit(commitSha)).parents?.[0];
     const f = parent ? await git.getFile(path, parent) : null;
     return f && !f.lossy ? linesOf(f.content) : null;

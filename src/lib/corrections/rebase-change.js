@@ -15,7 +15,7 @@ export function tokenize(s) {
 }
 
 /** LCS בין שתי רשימות; מחזיר זוגות [i, j] תואמים בסדר עולה, או null אם הקלט גדול מדי. */
-function matchPairs(a, b) {
+export function matchPairs(a, b, maxCells = MAX_CELLS) {
   let lo = 0;
   while (lo < a.length && lo < b.length && a[lo] === b[lo]) lo++;
   let ea = a.length;
@@ -23,7 +23,7 @@ function matchPairs(a, b) {
   while (ea > lo && eb > lo && a[ea - 1] === b[eb - 1]) { ea--; eb--; }
   const n = ea - lo;
   const m = eb - lo;
-  if ((n + 1) * (m + 1) > MAX_CELLS) return null;
+  if ((n + 1) * (m + 1) > maxCells) return null;
   const w = m + 1;
   const t = new Uint32Array((n + 1) * w);
   for (let i = n - 1; i >= 0; i--) {
@@ -42,6 +42,23 @@ function matchPairs(a, b) {
   }
   for (let k = 0; k < a.length - ea; k++) pairs.push([ea + k, eb + k]);
   return pairs;
+}
+
+/**
+ * הצ'אנקים בין שתי רשימות אסימונים — "איפה העריכה" (משותף למיזוג כאן ולאיתור ב-locate-edit.js):
+ * [{s, e, repl, ns, ne}] — הטווח [s, e) ב-a מוחלף ב-repl = b[ns, ne) (s === e: הוספה). null כשהקלט גדול מדי.
+ */
+export function diffHunks(a, b, pairs = matchPairs(a, b)) {
+  if (!pairs) return null;
+  const hunks = [];
+  let pi = 0;
+  let pj = 0;
+  for (const [i, j] of [...pairs, [a.length, b.length]]) {
+    if (i > pi || j > pj) hunks.push({ s: pi, e: i, repl: b.slice(pj, j), ns: pj, ne: j });
+    pi = i + 1;
+    pj = j + 1;
+  }
+  return hunks;
 }
 
 /**
@@ -65,14 +82,7 @@ export function rebaseLineChange(reportedOriginal, reportedNew, current) {
   for (const [i, j] of bc) toCur[i] = j;
 
   // הנקודות שבהן base ו-mine שונים = "הצ'אנקים" של המשתמש
-  const hunks = [];
-  let pi = 0;
-  let pj = 0;
-  for (const [i, j] of [...bm, [base.length, mine.length]]) {
-    if (i > pi || j > pj) hunks.push({ s: pi, e: i, repl: mine.slice(pj, j) });
-    pi = i + 1;
-    pj = j + 1;
-  }
+  const hunks = diffHunks(base, mine, bm);
 
   const edits = [];
   let applied = 0;
