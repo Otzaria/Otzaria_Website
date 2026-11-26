@@ -69,6 +69,7 @@ export default function OcrTrainingEditor() {
 
   useEffect(() => {
     if (status === 'authenticated') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState העיקרי קורה אחרי await (setLoading(true) הסינכרוני הוא no-op בעליה)
       load()
     }
   }, [status, id, load])

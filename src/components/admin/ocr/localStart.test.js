@@ -116,6 +116,13 @@ describe('postLocalStart', () => {
   const reply = (status, body) => ({ status, json: async () => body })
   const payload = { bookId: 'b', method: 'local', requestId: 'req-xyz-123456' }
 
+  it('url — נקודת קצה אחרת (מסלול הבעלים); בלי url — מסלול הניהול', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(reply(202, { success: true, jobId: 'j', status: 'queued' }))
+    await postLocalStart({ payload, fetchImpl, url: '/api/user/books/ocr/start' })
+    await postLocalStart({ payload, fetchImpl })
+    expect(fetchImpl.mock.calls.map((c) => c[0])).toEqual(['/api/user/books/ocr/start', START_URL])
+  })
+
   it('ניסיון חוזר עם אותו payload עד להצלחה', async () => {
     const fetchImpl = vi.fn()
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))

@@ -215,7 +215,7 @@ test('layout פגום/גדול/גרסה לא נתמכת, warnings זבל ו-meta
 test('קינון עמוק מאוד ב-metadata (ספר ועמוד) וב-layout: לא 500 — התוצאה מתקבלת והטקסט נכתב', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { job, pages } = await makeJobFromEnvelope();
-  // JSON.stringify זורק RangeError על עומק כזה, ולכן הבתים נבנים כמחרוזת
+  // הבתים נבנים כמחרוזת: JSON.stringify על עומק כזה זורק RangeError בגרסאות V8 ישנות
   const deep = `${'['.repeat(100_000)}0${']'.repeat(100_000)}`;
   const doc = fixture();
   doc.metadata.deep = '@DEEP@';
@@ -229,9 +229,33 @@ test('קינון עמוק מאוד ב-metadata (ספר ועמוד) וב-layout: 
   assert.deepEqual(recs.map((r) => r.layoutStatus), ['ok', 'invalid', 'absent']);
   assert.equal(recs[0].metadataJson, null);
   assert.ok(recs[0].warnings.some((w) => w.code === 'metadata_too_large' && w.source === 'site'));
+  assert.equal(recs[1].layoutRejectedJson, null); // מקונן מעל 64 — לא נשמר גם לבירור
   const j = await load(job._id);
   assert.equal(j.resultMetadataTruncated, true);
   assert.equal(JSON.parse(j.resultMetadataJson).service_version, FIXTURE.metadata.service_version);
+  assert.equal(JSON.parse(j.resultMetadataJson).deep, undefined);
+});
+
+test('קינון של 65 רמות ב-metadata — קטן מכדי להיתפס בגודל: העמוד בלי metadata, הספר → תת-קבוצה (בכל גרסת Node)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { job } = await makeJobFromEnvelope();
+  const doc = fixture();
+  // metadata (רמה 1) + 64 מערכים = 65 רמות; כמה מאות בתים בלבד
+  doc.metadata.deep = JSON.parse(`${'['.repeat(64)}0${']'.repeat(64)}`);
+  doc.pages[0].metadata.deep = doc.metadata.deep;
+  // בדיוק 64 רמות בעמוד 2 — נשמר
+  doc.pages[1].metadata = { ...(doc.pages[1].metadata || {}), deep: JSON.parse(`${'['.repeat(63)}0${']'.repeat(63)}`) };
+  const bytes = Buffer.from(JSON.stringify(doc), 'utf8');
+  expectAck(await send(job._id, bytes), 'accepted', sha256(bytes), 'partial');
+  const recs = await recordsOf(job);
+  assert.equal(recs[0].metadataJson, null);
+  assert.ok(recs[0].warnings.some((w) => w.code === 'metadata_too_large' && w.source === 'site'));
+  assert.deepEqual(JSON.parse(recs[1].metadataJson), doc.pages[1].metadata);
+  const j = await load(job._id);
+  assert.equal(j.resultMetadataTruncated, true);
+  const kept = JSON.parse(j.resultMetadataJson);
+  assert.equal(kept.deep, undefined);
+  assert.equal(kept.service_version, FIXTURE.metadata.service_version);
 });
 
 test('התנגשות: עמוד שנערך → OcrConflict + רשומה (pending_conflict); אימוץ → current בנתיב הקריאה', async (t) => {

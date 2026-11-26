@@ -121,7 +121,7 @@ export default function LocalOcrJobProgress({
       ) : worker?.availability === 'online' ? (
         <p className="flex items-center gap-1.5 text-label-sm font-normal text-on-surface-variant">
           <AppIcon name="computer" className="text-icon-xs" />
-          המחשב המעבד מחובר (נראה לאחרונה: {formatLastSeen(worker.lastSeenAt, now)})
+          המחשב המעבד מחובר{Object.hasOwn(worker, 'lastSeenAt') && <> (נראה לאחרונה: {formatLastSeen(worker.lastSeenAt, now)})</>}
         </p>
       ) : null}
 

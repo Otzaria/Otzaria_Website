@@ -12,6 +12,9 @@ export const ROLES = {
   MODEL_TRAINER: 'model_trainer',
   // מפתח: דיווחי התוכנה בלבד (/library/admin/app-reports). בכוונה לא ב-ALL_ADMIN_ROLES.
   DEVELOPER: 'developer',
+  // OCR לספרים אישיים: משתמש רגיל (בלי ממשק ניהול), שרשאי בנוסף לשלוח ל-OCR ספרים שהעלה בעצמו
+  // ב"הספרים שלי" — ורק אותם. בכוונה לא ב-ALL_ADMIN_ROLES.
+  PRIVATE_OCR: 'private_ocr',
 }
 
 export const ROLE_LABELS = {
@@ -23,6 +26,7 @@ export const ROLE_LABELS = {
   admin_ocr: 'מנהל OCR',
   model_trainer: 'מאמן מודלים',
   developer: 'מפתח',
+  private_ocr: 'OCR לספרים אישיים',
 }
 
 export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY, ROLES.ADMIN_OCR, ROLES.MODEL_TRAINER]
@@ -48,6 +52,7 @@ export const ASSIGNABLE_ROLES = [
   ROLES.ADMIN_OCR,
   ROLES.MODEL_TRAINER,
   ROLES.DEVELOPER,
+  ROLES.PRIVATE_OCR,
 ]
 
 /** הערכים המותרים בשדה role של המודל (כולל 'user') */
@@ -141,6 +146,11 @@ export function hasOcrAccess(subject) {
 /** גישה לדיווחי התוכנה (מנהל כללי או מפתח) */
 export function hasAppReportsAccess(subject) {
   return hasRole(subject, ROLES.ADMIN, ROLES.DEVELOPER)
+}
+
+/** שליחת ספר אישי שלו ל-OCR (/api/user/books/ocr/*; הבעלות נבדקת שם — ocr/bookOcrAccess.js) */
+export function hasPrivateOcrAccess(subject) {
+  return hasRole(subject, ROLES.ADMIN, ROLES.PRIVATE_OCR)
 }
 
 /** משוב החיפוש הסמנטי (סטטיסטיקה, ייצוא, ניקוי, חסימת מפתחות) — מנהל כללי ומאמן מודלים */

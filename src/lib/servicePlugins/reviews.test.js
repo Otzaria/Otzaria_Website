@@ -29,6 +29,7 @@ import {
 } from './reviews.js'
 import { getAdminView, getManageView } from './views.js'
 import { withPartialScanNote } from '../../../workers/service-plugin-broker/src/clamavPartial.js'
+import { MAX_RECEIPT_DATA_DEPTH } from './workerOps.js'
 import { runServicePluginCleanup } from './cleanup.js'
 import { releaseClamavReopen } from './clamavOverride.js'
 import { writeReviewAssetStream } from './storage.js'
@@ -355,6 +356,13 @@ describe('תור, נעילה ו-lease', () => {
     expect(await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'hashes', digest: 'a'.repeat(64), data: {} })).toMatchObject({ code: 'digest_mismatch' })
     expect(await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'bogus', digest: job.manifestDigest })).toMatchObject({ code: 'invalid_stage' })
     expect(await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'hashes', digest: job.manifestDigest, data: { x: 'y'.repeat(70_000) } })).toMatchObject({ status: 413 })
+    // עומק data: בדיוק 64 נשמר, 65 (כמה מאות בתים בלבד) → 400 invalid_data — בכל גרסת Node, לפני MongoDB
+    const nested = (n) => JSON.parse(`${'['.repeat(n)}0${']'.repeat(n)}`)
+    expect(MAX_RECEIPT_DATA_DEPTH).toBe(64)
+    expect(await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'hashes', digest: job.manifestDigest, data: { deep: nested(64) } })).toMatchObject({ status: 400, code: 'invalid_data' })
+    expect(await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'hashes', digest: job.manifestDigest, data: { deep: nested(100_000) } })).toMatchObject({ status: 400, code: 'invalid_data' })
+    expect(await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'hashes', digest: job.manifestDigest, data: { deep: nested(63) } })).toMatchObject({ ok: true })
+    expect((await loadReview(job.reviewId)).receipts[0].data).toEqual({ deep: nested(63) })
     await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'hashes', digest: job.manifestDigest, data: { v: 1 } })
     await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'hashes', digest: job.manifestDigest, data: { v: 2 } })
     const stored = await loadReview(job.reviewId)

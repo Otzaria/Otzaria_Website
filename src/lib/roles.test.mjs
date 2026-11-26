@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   getRoles, hasRole, normalizeRoles, primaryRole, roleQuery, notRoleQuery,
   isAdmin, hasBooksAccess, hasBookLibraryAccess, hasOcrAccess, hasPluginsAccess, hasAppReportsAccess,
-  hasSearchFeedbackAccess, hasTzuratAdminAccess, hasAnyAdminAccess,
+  hasSearchFeedbackAccess, hasTzuratAdminAccess, hasAnyAdminAccess, hasPrivateOcrAccess,
   canEditLibraryDirectly, canHandleCorrections, canManageCorrections, canConfigureCorrections,
   ASSIGNABLE_ROLES,
 } from './roles.js'
@@ -84,4 +84,21 @@ test('הרשאות לפי משתמש (דגלים + תפקידים)', () => {
 test('hasRole', () => {
   assert.equal(hasRole(['developer', 'admin_ocr'], 'developer'), true)
   assert.equal(hasRole('admin_ocr', 'developer'), false)
+})
+
+test('OCR לספרים אישיים (private_ocr): הרשאה צרה, לא תפקיד ניהול', () => {
+  const u = { role: 'user', roles: ['private_ocr'] }
+  assert.deepEqual(getRoles(u), ['private_ocr'])
+  assert.equal(hasPrivateOcrAccess(u), true)
+  assert.equal(hasPrivateOcrAccess('admin'), true)
+  for (const role of ['user', 'admin_books', 'admin_books_only', 'admin_ocr', 'model_trainer', 'developer']) {
+    assert.equal(hasPrivateOcrAccess(role), false, role)
+  }
+  // בלי שום גישת ניהול
+  for (const fn of [isAdmin, hasAnyAdminAccess, hasBooksAccess, hasBookLibraryAccess, hasOcrAccess, hasPluginsAccess,
+    hasAppReportsAccess, hasSearchFeedbackAccess, hasTzuratAdminAccess, canEditLibraryDirectly, canHandleCorrections]) {
+    assert.equal(fn(u), false, fn.name)
+  }
+  // תפקיד ראשי של מנהל לא מוחלף בו כשהם יחד
+  assert.equal(primaryRole(['private_ocr', 'admin_ocr']), 'admin_ocr')
 })

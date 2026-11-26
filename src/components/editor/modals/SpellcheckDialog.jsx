@@ -149,6 +149,7 @@ export default function SpellcheckDialog({
     if (!isOpen) {
       hasLoadedWordsRef.current = false
       if (checkAbortRef.current) checkAbortRef.current.abort()
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- איפוס בסגירת הדיאלוג, מסונכרן עם ביטול הבקשה ומסך-הטעינה הגלובלי (מערכת חיצונית)
       setIsReady(false)
       stopLoading()
       return
@@ -182,6 +183,7 @@ export default function SpellcheckDialog({
   // Fetch suggestions from server whenever selected word changes
   useEffect(() => {
     if (!selectedWord) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- ניקוי ההצעות כשאין מילה נבחרת — חלק מאותו סנכרון מול בקשת השרת (AbortController) של האפקט
       setSuggestions([])
       return
     }

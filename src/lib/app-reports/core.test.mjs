@@ -10,7 +10,7 @@ import { validateAppReport, LEGACY_MAX_DIAGNOSTICS_BYTES as MAX_DIAGNOSTICS_BYTE
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
-import { planPublication, parseAppVersion, compareAppVersions, isGenericHangSignature } from './merge.js';
+import { planPublication, parseAppVersion, compareAppVersions, isGenericHangSignature, isShortRunnerHangSignature } from './merge.js';
 import { planClosureNotifications, closureKind, CLOSURE_TEXT_HE, pickClosingComment, CLOSING_COMMENT_MAX_CHARS } from './state-change.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken, buildUnsubscribeUrl } from './unsubscribe.js';
 import { getAppReportsConfig } from './config.js';
@@ -267,9 +267,43 @@ test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מ�
   assert.equal(isGenericHangSignature(precise), false);
   assert.deepEqual(planPublication(related, '0.9.90', precise), suppress);
   assert.equal(isGenericHangSignature({ exceptionType: 'StateError', frames: ['flutter_windows.dll+0x1'] }), false);
+  // לולאת ההודעות של קובץ ההפעלה בלבד → גנרית; גם issue פתוח עם אותה חתימה לא מקבל אותה כתגובה
+  const idle = { exceptionType: 'AppHang', frames: ['otzaria.exe+0x17cb6', 'otzaria.exe+0x26539'] };
+  assert.equal(isGenericHangSignature(idle), true);
+  assert.equal(isShortRunnerHangSignature(idle), true);
+  const withOpen = [...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }];
+  assert.deepEqual(planPublication(withOpen, '0.9.90', idle), { action: 'create', previousIssueNumber: 9 });
+  assert.deepEqual(planPublication(withOpen.filter((r) => r.issueState === 'open'), '0.9.90', idle), { action: 'create', previousIssueNumber: null });
+  // פריימי מנוע בלבד עדיין מצטרפים ל-issue פתוח: המחסנית המלאה ספציפית מספיק לתגובה
+  assert.equal(isShortRunnerHangSignature(engine), false);
+  assert.deepEqual(planPublication(withOpen, '0.9.90', engine), { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
+  // קוד נייטיב של ה-runner (יותר מלולאת ההודעות), חתימה מעורבת או ריקה אינם לולאת ההודעות
+  assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: ['otzaria.exe+0x1 otzaria.exe+0x2 otzaria.exe+0x3'] }), false);
+  assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: ['otzaria.exe+0x1', 'flutter_windows.dll+0x2'] }), false);
+  assert.equal(isShortRunnerHangSignature({ exceptionType: 'AppHang', frames: [] }), false);
+  assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: [] }), true);
+  assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: [' '] }), false);
   // issue פתוח קודם לכל השוואת גרסאות
   assert.deepEqual(planPublication([...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }], '0.9.90'),
     { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
+});
+
+test('חתימת runner קצרה: רק כתובות של אוצריא וקישור קודם רק ל-issue שידוע כסגור', () => {
+  const hang = (...frames) => ({ exceptionType: 'AppHang', frames });
+  const idle = hang('OTZARIA.EXE+0x13156 otzaria.exe+0x2099a');
+  assert.equal(isShortRunnerHangSignature(idle), true);
+  assert.equal(isShortRunnerHangSignature(hang('otzaria.exe+0x1')), true);
+  assert.equal(isShortRunnerHangSignature(hang('otzaria.exe+')), false);
+  assert.equal(isShortRunnerHangSignature(hang('otzaria.exe+0x1', 'launcher.exe+0x2')), false);
+  assert.equal(isShortRunnerHangSignature(hang('launcher.exe+0x1')), false);
+  const related = [
+    { issueNumber: 1, issueState: 'closed', createdAt: new Date('2026-11-01') },
+    { issueNumber: 2, issueState: 'closed', createdAt: new Date('2026-11-02') },
+    { issueNumber: 3, issueState: 'open', createdAt: new Date('2026-11-03') },
+    { issueNumber: 4, issueState: null, createdAt: new Date('2026-11-04') },
+  ];
+  assert.deepEqual(planPublication(related, '0.9.90', idle), { action: 'create', previousIssueNumber: 2 });
+  assert.deepEqual(planPublication(related.slice(2), '0.9.90', idle), { action: 'create', previousIssueNumber: null });
 });
 
 test('גרסה מרבית: דיווח בלי בנייה אינו מסתיר את הבנייה המרבית הידועה, בלי תלות בסדר', () => {

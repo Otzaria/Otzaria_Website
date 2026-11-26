@@ -325,6 +325,29 @@ test('issue סגור של תקיעה עם פריימי מנוע בלבד → iss
   assert.match(gh.issues.get(b.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
 });
 
+test('חתימת runner קצרה פותחת issue נפרד גם אם דיווח דומה כבר בפרסום', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const hang = (description) => crash({
+    title: 'תקיעה', description,
+    signature: { exceptionType: 'AppHang', frames: ['otzaria.exe+0x17cb6', 'otzaria.exe+0x26539'] },
+  });
+  const previous = await post(hang('דיווח שנסגר'));
+  gh.setState(previous.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+
+  const open = await post(hang('דיווח בכרטיס פתוח'));
+  const racing = await post(hang('דיווח שכבר בפרסום'), { deps: { config: getAppReportsConfig({}) } });
+  await AppReport.updateOne({ reportId: racing.body.reportId }, { $set: { issueLeaseUntil: new Date(Date.now() + 60_000) } });
+
+  const current = await post(hang('תקיעה אחרת עם אותה חתימה'));
+  assert.equal(current.body.issuePending, false);
+  assert.equal(current.body.merged, false);
+  assert.notEqual(current.body.issueNumber, previous.body.issueNumber);
+  assert.notEqual(current.body.issueNumber, open.body.issueNumber);
+  assert.equal(gh.comments.length, 0);
+  assert.match(gh.issues.get(current.body.issueNumber).body, new RegExp(`קודם: #${previous.body.issueNumber}`));
+});
+
 test('שני דיווחים במקביל עם אותה חתימה → issue אחד ותגובה אחת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const [a, b] = await Promise.all([post(crash()), post(crash({ description: 'גם אצלי' }))]);

@@ -47,6 +47,7 @@ export default function LibraryInfoPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת + רענון תקופתי; ה-setState העיקרי קורה אחרי await
     loadData()
     const refresh = () => { if (!document.hidden) loadData(true) }
     const interval = setInterval(refresh, 60_000)

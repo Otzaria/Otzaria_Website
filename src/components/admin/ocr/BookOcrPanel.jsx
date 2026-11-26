@@ -53,6 +53,8 @@ const GEMINI_DISABLED = true
 
 const APPLY_STARTED_HE = 'הקליטה כבר החלה — לא ניתן לבטל'
 
+const ADMIN_OCR_API = '/api/admin/books/ocr'
+
 // sessionStorage עלול לזרוק בגישה עצמה (חלון פרטי / חסימת אחסון)
 function sessionStore() {
   try {
@@ -79,8 +81,13 @@ function sessionStore() {
  * ו"עד עמוד" נבדק מול מספר העמוד הגבוה בספר (counts.maxPageNumber; בגיבוי book.totalPages).
  *
  * localRetryDelayMs — ההמתנה בין ניסיונות חוזרים של בקשת local (ניתן לשינוי לטסטים).
+ *
+ * apiBase — נקודות הקצה (status / start / cancel). ברירת המחדל — מסלול הניהול; בעל ספר אישי עם
+ * תפקיד private_ocr — '/api/user/books/ocr' ("הספרים שלי", PersonalBookOcrDrawer).
+ * reviewResults — בדיקת התנגשויות ותוצאות שלא הוחלו (נקודות קצה של ניהול בלבד). false — במקומן
+ * הודעה קצרה שיש מה לבדוק אצל מנהל, בלי כפתורים.
  */
-export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DELAY_MS }) {
+export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DELAY_MS, apiBase = ADMIN_OCR_API, reviewResults = true }) {
   const [loading, setLoading] = useState(true)
   const [counts, setCounts] = useState({ pagesWithImage: 0, editedPagesCount: 0 })
   const [job, setJob] = useState(null)
@@ -89,8 +96,10 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   // מעבודות local קודמות (של העבודה האחרונה מוצגות ב-LocalResultIssues)
   const [bookConflictsOpen, setBookConflictsOpen] = useState(0)
   const [olderResultConflicts, setOlderResultConflicts] = useState([])
+  const [pendingReview, setPendingReview] = useState(false)
   const [error, setError] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [bookUnavailable, setBookUnavailable] = useState(false)
   const [confirm, confirmElement] = useConfirm()
 
   // הגדרות הטופס
@@ -119,20 +128,22 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
 
   const fetchStatus = useCallback(async () => {
     try {
-      const data = await requestJson(`/api/admin/books/ocr/status?bookId=${encodeURIComponent(book.id)}`, { fallback: 'לא הצלחנו לטעון את מצב הזיהוי.' })
+      const data = await requestJson(`${apiBase}/status?bookId=${encodeURIComponent(book.id)}`, { fallback: 'לא הצלחנו לטעון את מצב הזיהוי.' })
       setCounts(data.counts)
       setJob(data.job)
       setWorker(data.worker ?? null)
       // שרת ישן בלי bookConflictsOpen — נופלים לספירה של העבודה האחרונה
       setBookConflictsOpen(Number(data.bookConflictsOpen ?? data.conflictsOpen) || 0)
       setOlderResultConflicts(Array.isArray(data.olderResultConflicts) ? data.olderResultConflicts : [])
+      setPendingReview(data.pendingReview === true)
     } catch (e) {
       if (e?.sessionExpired) setSessionExpired(true)
+      else if (!reviewResults && (e?.status === 403 || e?.status === 404)) setBookUnavailable(true)
       else setError(e?.message || 'לא הצלחנו לטעון את מצב הזיהוי.')
     } finally {
       setLoading(false)
     }
-  }, [book.id])
+  }, [book.id, apiBase, reviewResults])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState קורה אחרי await
@@ -140,7 +151,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   }, [fetchStatus])
 
   // polling כל עוד יש עבודה פעילה: שרת כל 2.5 שניות, מחשב מקומי כל 10 שניות
-  const pollMs = sessionExpired ? null : pollIntervalMs(job)
+  const pollMs = sessionExpired || bookUnavailable ? null : pollIntervalMs(job)
   useEffect(() => {
     if (pollMs) {
       pollRef.current = setInterval(fetchStatus, pollMs)
@@ -153,7 +164,9 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   const localUnavailableInServer = worker?.configured === false
 
   // טווח העמודים: null = כל הספר; טווח לא תקין חוסם את ההתחלה (וההודעה מוצגת מתחת לשדות)
-  const pageTotal = Number(counts.maxPageNumber) || Number(book.totalPages) || undefined
+  const countedPages = Number(counts.maxPageNumber) || 0
+  const bookPages = Number(book.totalPages) || 0
+  const pageTotal = (reviewResults ? countedPages || bookPages : Math.max(countedPages, bookPages)) || undefined
   const parsedRange = parsePageRangeInput(rangeInput, { total: pageTotal })
   const pageRange = parsedRange.ok ? parsedRange.range : null
   const rangeInvalid = !parsedRange.ok
@@ -193,6 +206,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
     const controller = new AbortController()
     startAbortRef.current = controller
     const result = await postLocalStart({
+      url: `${apiBase}/start`,
       payload: { bookId: book.id, method: 'local', requestId, existingTextMode, options: localOptions, ...rangeBody },
       delayMs: localRetryDelayMs,
       onRetry: (n, total) => setStartNote(`השרת עדיין לא השיב — מנסה שוב (${n}/${total}) עם אותה בקשה…`),
@@ -225,6 +239,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
     startAbortRef.current = controller
     try {
       const result = await postLocalStart({
+        url: `${apiBase}/start`,
         payload: resumePreparationPayload(job, book.id),
         delayMs: localRetryDelayMs,
         onRetry: (n, total) => setResumeNote(`השרת עדיין לא השיב — מנסה שוב (${n}/${total}) עם אותה בקשה…`),
@@ -260,7 +275,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
         await handleStartLocal()
         return
       }
-      await requestJson('/api/admin/books/ocr/start', {
+      await requestJson(`${apiBase}/start`, {
         method: 'POST',
         body: { bookId: book.id, method, model, existingTextMode, splitColumns, ...rangeBody },
         fallback: 'לא הצלחנו להתחיל את הזיהוי.',
@@ -284,7 +299,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
     try {
       // local — לפי מזהה העבודה המוצגת (לא "העבודה הפעילה של הספר", שאולי כבר אחרת)
       const target = isLocalJob(job) && job?.id ? { jobId: job.id } : { bookId: book.id }
-      await requestJson('/api/admin/books/ocr/cancel', { method: 'POST', body: target, fallback: 'לא הצלחנו לעצור את העבודה.' })
+      await requestJson(`${apiBase}/cancel`, { method: 'POST', body: target, fallback: 'לא הצלחנו לעצור את העבודה.' })
     } catch (e) {
       if (e?.sessionExpired) setSessionExpired(true)
       // 409 apply_started — "הקליטה כבר החלה": התוצאה כבר נקלטת לעמודים
@@ -320,7 +335,6 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   // פאנל ברמת הספר: גם אחרי עבודה חדשה (OCRWin או local) ההתנגשויות הקודמות נשארות נגישות
   const showConflicts = !isRunning
     && (bookConflictsOpen > 0 || Number(lastLocalJob?.summary?.conflicts) > 0)
-
   // רק השיטות הזמינות עכשיו (החלטת המשתמש): שיטה מושבתת או לא מוגדרת בשרת — לא מוצגת
   const methodOptions = [
     { id: 'gemini', label: 'בינה מלאכותית', desc: 'איכות גבוהה', disabled: GEMINI_DISABLED },
@@ -337,6 +351,10 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
         action={<Button href={loginHref()} variant="filled" size="sm" icon="login">התחבר</Button>}
       />
     )
+  }
+
+  if (bookUnavailable) {
+    return <ErrorState title="זיהוי טקסט אינו זמין לספר הזה" description="הספר כבר אינו זמין לך לעיבוד או שההרשאה השתנתה." />
   }
 
   return (
@@ -359,7 +377,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
             resuming={resuming}
             resumeNote={resumeNote}
           />
-          <LocalResultIssues job={job} onChanged={fetchStatus} />
+          {reviewResults && <LocalResultIssues job={job} onChanged={fetchStatus} />}
         </div>
       ) : isRunning ? (
         // ===== תצוגת התקדמות (Gemini / OCRWin) =====
@@ -405,7 +423,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
           {lastLocalJob && (
             <>
               <OcrJobSummary job={lastLocalJob} />
-              <LocalResultIssues job={lastLocalJob} onChanged={fetchStatus} />
+              {reviewResults && <LocalResultIssues job={lastLocalJob} onChanged={fetchStatus} />}
             </>
           )}
 
@@ -427,8 +445,16 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
             </div>
           )}
 
-          {showConflicts && <OcrConflictsPanel bookId={book.id} onChanged={fetchStatus} />}
-          <OlderResultConflicts items={olderResultConflicts} onChanged={fetchStatus} />
+          {reviewResults ? (
+            <>
+              {showConflicts && <OcrConflictsPanel bookId={book.id} onChanged={fetchStatus} />}
+              <OlderResultConflicts items={olderResultConflicts} onChanged={fetchStatus} />
+            </>
+          ) : pendingReview && (
+            <p role="status" className="rounded-(--radius-control) bg-surface-container-low p-3 text-body-sm text-on-surface-variant">
+              חלק מתוצאות הזיהוי לא נכתבו לעמודים (למשל כי הטקסט בהם השתנה בינתיים), והן ממתינות לבדיקת מנהל האתר.
+            </p>
+          )}
 
           <div>
             <p className={FIELD_LABEL}>איך לזהות את הטקסט</p>
@@ -502,7 +528,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
                   <span>
                     יש {counts.editedPagesCount} עמודים שכבר יש בהם טקסט (מתוך {counts.pagesWithImage})
                     {Number.isFinite(counts.humanEditedPagesCount) && (
-                      <>; מתוכם {counts.humanEditedPagesCount} נערכו או נתפסו בידי מתנדבים</>
+                      <>; מתוכם {counts.humanEditedPagesCount} {reviewResults ? 'נערכו או נתפסו בידי מתנדבים' : 'נערכו ידנית'}</>
                     )}.
                   </span>
                 </div>

@@ -36,11 +36,13 @@ const time = (d) => (d ? new Date(d).getTime() : NaN);
  * - בלי טביעה, contentSaveRevision הוא עדות לשמירה אנושית, גם אם העמוד ריק.
  * - עמוד ריק בלי עדות לעריכה — לא ערוך.
  * - אחרת (עמוד ישן): לא ערוך רק אם השתנה לאחרונה באותה כתיבה של OCR מקומי (lastOcrAt).
- * @param {{status?:string, content?:string, rightColumn?:string, leftColumn?:string,
+ * @param {{status?:string, claimedBy?:any, content?:string, rightColumn?:string, leftColumn?:string,
  *   contentSaveRevision?:number, lastOcrTextSha256?:string, lastOcrAt?:Date|string, updatedAt?:Date|string}} p
+ * @param {any} [ownerId] בספר אישי, ההעלאה תופסת מראש את כל העמודים לבעלים.
  */
-export function pageEditedByHuman(p) {
-  if (p.status && p.status !== 'available') return true;
+export function pageEditedByHuman(p, ownerId) {
+  const preclaimed = ownerId != null && p.status === 'in-progress' && String(p.claimedBy) === String(ownerId);
+  if (p.status && p.status !== 'available' && !preclaimed) return true;
   if (p.rightColumn?.trim() || p.leftColumn?.trim()) return true;
   if (p.lastOcrTextSha256) return ocrTextSha256(p.content ?? '') !== p.lastOcrTextSha256;
   if (p.contentSaveRevision > 0) return true;
@@ -50,20 +52,20 @@ export function pageEditedByHuman(p) {
 }
 
 // האם העמוד לא יעובד במצב הנתון (מצב לא מוכר מטופל כ-skip, כמו ברירת המחדל במודל)
-export function pageSkippedInMode(p, mode) {
+export function pageSkippedInMode(p, mode, ownerId) {
   if (mode === 'overwrite') return false;
-  if (mode === 'skip_edited') return pageEditedByHuman(p);
+  if (mode === 'skip_edited') return pageEditedByHuman(p, ownerId);
   return pageHasText(p);
 }
 
 // עותק קל של עמוד לבחירה (בלי הטקסט עצמו, שעשוי להיות גדול) שנותן ל-pageHasText ול-pageEditedByHuman
 // בדיוק את אותן תשובות כמו העמוד המלא: content מוחלף בסמן '1'/'', והטביעה נקבעת לפי הסמן.
 // revision חיובי מסמן כאן עריכה גם בעמוד ריק; עותק הבחירה אינו נכתב חזרה למסד.
-export function selectionView(p) {
+export function selectionView(p, ownerId) {
   const hasText = pageHasText(p);
-  const edited = pageEditedByHuman(p);
+  const edited = pageEditedByHuman(p, ownerId);
+  // ההכרעה על השלב והבעלות כבר נכללת בסמן העריכה.
   return {
-    status: p.status,
     content: hasText ? '1' : '',
     lastOcrTextSha256: hasText && !edited ? ocrTextSha256('1') : undefined,
     ...(edited ? { contentSaveRevision: 1 } : {}),
@@ -95,9 +97,9 @@ export function jobPageRange(job) {
 
 // העמודים שעבודת שרת (gemini/ocrwin) מעבדת: עם תמונה, לא מדולגים במצב, ובטווח (null = הכל).
 // שומר על הסדר המקורי (runOcrJob ממיין לפי pageNumber בשאילתה).
-export function selectServerJobPages(pages, mode, range = null) {
+export function selectServerJobPages(pages, mode, range = null, ownerId = undefined) {
   return (pages || []).filter(
-    (p) => !!p.imagePath && !pageSkippedInMode(p, mode) && pageInRange(p.pageNumber, range)
+    (p) => !!p.imagePath && !pageSkippedInMode(p, mode, ownerId) && pageInRange(p.pageNumber, range)
   );
 }
 

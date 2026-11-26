@@ -12,6 +12,7 @@ import { newLeaseToken, hashLeaseToken, isLeaseTokenShape } from './workerAuth.j
 import { publishReview, finalizeIfPublished, releaseScanLock, scanLockFilter, CLEARED_LEASE } from './publish.js'
 import { syncPortReservations } from './ports.js'
 import { openReviewAssetStream } from './storage.js'
+import { exceedsJsonDepth } from '../jsonDepth.js'
 
 const fail = (status, code, more = {}) => ({ ok: false, status, code, ...more })
 const leaseLost = () => fail(409, 'lease_lost')
@@ -19,6 +20,11 @@ const isId = (v) => typeof v === 'string' && /^[a-f0-9]{24}$/.test(v)
 const leaseUntil = (now) => new Date(now.getTime() + LEASE_SECONDS * 1000)
 const CODE_RE = /^[A-Za-z0-9_.-]{1,64}$/
 const MAX_LEASE_EXPIRIES = 5
+// עומק הקינון המרבי של data בקבלת שלב. הקבלה נשמרת כאובייקט ב-receipts[].data (מסמך → receipts →
+// קבלה → data), ו-MongoDB דוחה מסמך מקונן מדי (התיעוד: 100 רמות; השרת דוחה בפועל מעל כ-180) —
+// שגיאת שרת (500) שהמתווך מנסה שוב לנצח. קבלות אמיתיות רדודות (כמה רמות); 64 משאיר מרווח מתחת
+// לגבול המתועד של MongoDB, ונפסל ב-400 invalid_data הקיים (כמו data שלא ניתן לסריאליזציה).
+export const MAX_RECEIPT_DATA_DEPTH = 64
 
 async function ensureControl() {
   try {
@@ -190,6 +196,8 @@ export async function heartbeat({ reviewId, token, now = new Date() }) {
 export async function checkpoint({ reviewId, token, stage, digest, data, now = new Date() }) {
   if (!RECEIPT_STAGES.includes(stage)) return fail(400, 'invalid_stage')
   if (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)) return fail(400, 'invalid_digest')
+  // העומק נבדק במפורש: RangeError של JSON.stringify על קינון עמוק תלוי בגרסת V8 (ב-Node 26 כבר לא נזרק)
+  if (exceedsJsonDepth(data, MAX_RECEIPT_DATA_DEPTH)) return fail(400, 'invalid_data')
   let size
   try {
     size = Buffer.byteLength(JSON.stringify(data ?? null), 'utf8')

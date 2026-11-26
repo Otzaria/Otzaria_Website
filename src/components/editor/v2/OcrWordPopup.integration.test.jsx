@@ -239,10 +239,16 @@ it('a suggestion from a stale render cannot overwrite a changed live field', asy
   const field = fieldOf(container)
   clickAt(field, POS)
   const pop = await screen.findByRole('dialog', { name: 'הצעות למילה פוסרת' })
-  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, 'טקסט שהשתנה לפני הרינדור')
+  const original = field.value
+  const changed = 'טקסט שהשתנה לפני הרינדור'
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, changed)
   fireEvent.click(within(pop).getByRole('button', { name: 'החלף בפוטרת' }))
-  expect(field.value).toBe('טקסט שהשתנה לפני הרינדור')
+  // השדה מבוקר: אם עדכון מעקב מושהה (usePageTracking) ממתין, הרינדור שהלחיצה מבצעת מחיל גם
+  // אותו ומחזיר את הערך שב-DOM לערך שב-state. זה לא דריסה — ההחלפה עצמה אסור שתגיע לשום מקום.
+  expect([changed, original]).toContain(field.value)
   expect(pop).toHaveTextContent('הטקסט השתנה')
+  await act(async () => {})
+  expect(field.value).not.toContain('פוטרת')
 })
 
 it('F8 on the word whose popup is already open does not steal focus on a later scroll', async () => {
@@ -321,7 +327,14 @@ it('closes instead of anchoring to a stale offset when the live text differs fro
   const field = fieldOf(container)
   clickAt(field, POS)
   await screen.findByRole('dialog', { name: 'הצעות למילה פוסרת' })
+  // השדה מבוקר: כל רינדור של העורך (למשל עדכון מעקב מושהה של usePageTracking) מחזיר את הערך
+  // שנקבע ישירות ב-DOM לערך שב-state, ואז הטקסט החי שוב זהה לנבדק. לכן המסגרת שהגודל מבקש
+  // מורצת מיד, באותו צעד סינכרוני עם שינוי הטקסט — בלי macrotask שבו רינדור כזה יכול להיכנס.
+  const frames = []
+  vi.stubGlobal('requestAnimationFrame', (cb) => frames.push(cb))
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, 'x' + field.value)
   fireEvent(window, new Event('resize'))
-  await waitFor(() => expect(popup()).toBeNull())
+  expect(frames).toHaveLength(1)
+  act(() => frames.splice(0).forEach((cb) => cb()))
+  expect(popup()).toBeNull()
 })

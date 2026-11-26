@@ -15,9 +15,9 @@ const ONLINE = { configured: true, lastSeenAt: new Date().toISOString(), availab
 
 function statusBody({
   job = null, worker = ONLINE, counts = { pagesWithImage: 10, editedPagesCount: 0 }, conflictsOpen = 0,
-  bookConflictsOpen = conflictsOpen, olderResultConflicts = [],
+  bookConflictsOpen = conflictsOpen, olderResultConflicts = [], pendingReview = false,
 } = {}) {
-  return { success: true, counts, job, worker, conflictsOpen, bookConflictsOpen, olderResultConflicts }
+  return { success: true, counts, job, worker, conflictsOpen, bookConflictsOpen, olderResultConflicts, pendingReview }
 }
 
 function localJob(overrides = {}) {
@@ -810,3 +810,75 @@ describe('BookOcrPanel — טווח עמודים', () => {
   })
 })
 
+
+// "הספרים שלי" — בעל ספר אישי עם private_ocr: אותו לוח מול /api/user/books/ocr, בלי בדיקת התוצאות (של מנהל)
+describe('BookOcrPanel — מסלול הבעלים (apiBase, reviewResults=false)', () => {
+  const USER_API = '/api/user/books/ocr'
+  function mockUserApi({ status = () => statusBody(), start, cancel } = {}) {
+    const calls = { start: [], cancel: [], status: 0, other: [] }
+    fetchMock.mockImplementation(async (url, init = {}) => {
+      const body = init.body ? JSON.parse(init.body) : undefined
+      if (url.startsWith(`${USER_API}/status?bookId=`)) { calls.status++; return reply(200, status()) }
+      if (url === `${USER_API}/start`) { calls.start.push(body); return start(body, calls.start.length) }
+      if (url === `${USER_API}/cancel`) { calls.cancel.push(body); return cancel(body) }
+      calls.other.push(url)
+      throw new Error(`unexpected fetch ${url}`)
+    })
+    return calls
+  }
+  const renderOwner = () => renderDialog({ apiBase: USER_API, reviewResults: false })
+
+  it('OCRWin ומחשב מקומי — הבקשות יוצאות לנתיבי המשתמש, עם אותו גוף', async () => {
+    const calls = mockUserApi({
+      start: (body) => body.method === 'local'
+        ? reply(202, { success: true, jobId: 'j2', status: 'queued' })
+        : reply(200, { success: true, jobId: 'j1', totalPages: 10 }),
+    })
+    const user = userEvent.setup()
+    renderOwner()
+    await user.click(await screen.findByRole('button', { name: /התחל זיהוי ב-10 עמודים/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(1))
+    expect(calls.start[0]).toEqual({ bookId: book.id, method: 'ocrwin', model: 'gemini-2.5-pro', existingTextMode: 'skip', splitColumns: false })
+    await user.click(screen.getByRole('button', { name: /מחשב מקומי/ }))
+    await user.click(screen.getByRole('button', { name: /שלח 10 עמודים לזיהוי/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(2))
+    expect(calls.start[1]).toMatchObject({ bookId: book.id, method: 'local', existingTextMode: 'skip' })
+    expect(calls.other).toEqual([])
+  })
+
+  it('עצירה — לנתיב המשתמש', async () => {
+    const calls = mockUserApi({
+      status: () => statusBody({ job: localJob({ status: 'running' }) }),
+      cancel: () => reply(200, { success: true }),
+    })
+    const user = userEvent.setup()
+    renderOwner()
+    await user.click(await screen.findByRole('button', { name: 'ביטול העבודה' }))
+    await user.click(screen.getByRole('button', { name: 'כן, לבטל' }))
+    await waitFor(() => expect(calls.cancel).toEqual([{ jobId: '507f1f77bcf86cd799439022' }]))
+  })
+
+  it('התנגשויות ותוצאות שלא הוחלו — הודעה בלבד, בלי פאנלים ובלי בקשות לנקודות הקצה של הניהול', async () => {
+    const calls = mockUserApi({
+      status: () => statusBody({
+        job: localJob({
+          status: 'completed', resultOutcome: 'success', summary: { applied: 7, failed: 0, conflicts: 1, missing: 0 },
+        }),
+        pendingReview: true,
+      }),
+    })
+    renderOwner()
+    expect(await screen.findByText('הוחלו: 7')).toBeInTheDocument()
+    expect(screen.getByText(/ממתינות לבדיקת מנהל האתר/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'סמן כנבדק' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'התנגשויות בקליטה' })).not.toBeInTheDocument()
+    expect(calls.other).toEqual([])
+  })
+
+  it('בלי שום דבר שממתין — אין הודעה', async () => {
+    mockUserApi({ status: () => statusBody({ job: { id: 'j', method: 'ocrwin', status: 'completed', totalPages: 4, processedPages: 4, successPages: 4, failedPages: 0 } }) })
+    renderOwner()
+    expect(await screen.findByText(/העבודה האחרונה הסתיימה/)).toBeInTheDocument()
+    expect(screen.queryByText(/ממתינות לבדיקת מנהל האתר/)).not.toBeInTheDocument()
+  })
+})

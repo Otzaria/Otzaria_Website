@@ -93,6 +93,7 @@ draft → sealing → pending_admin → queued → running → approved / reject
 | ניקוי שעתי | `GET`/`POST /api/cron/service-plugins-cleanup` עם `CRON_SECRET` |
 
 המתווך מזדהה בסוד שרת ייעודי; לכל משימה אסימון lease נוסף. הסוד אינו עובר ל־Claude או לכלי פירוק הארכיונים. חסימת הורדות אינה תלויה בכפתור אפור בצד לקוח. העריכה הישירה הקיימת נחסמת לתוספי שירות גם עבור מנהל.
+ב־`checkpoint`, העומק המרבי של `data` הוא 64 רמות של אובייקטים ומערכים, כולל המכל החיצוני. חריגה מחזירה `400 invalid_data`.
 
 ### 7.1 אישורי מנהל לתוצאות ClamAV
 

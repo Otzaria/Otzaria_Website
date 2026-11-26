@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
+import Book from '@/models/Book';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { apiError, serverError } from '@/lib/apiResponse';
@@ -23,9 +24,18 @@ export async function GET(request) {
 
         await connectDB();
 
+        // ספרים מוסתרים/פרטיים/אישיים הם קבוצה קטנה: שולפים את מזהיהם ומוציאים אותם
+        // כבר בחיפוש הטקסט עצמו, כך שה-limit חל רק על עמודים פומביים (תמיד עד 50
+        // תוצאות) ובלי $lookup על כל העמודים שמתאימים למילה נפוצה.
+        const restrictedBooks = await Book.find(
+            { $or: [{ isHidden: true }, { isPrivate: true }, { ownerId: { $exists: true, $ne: null } }] },
+            { _id: 1 }
+        ).lean();
+        const restrictedIds = restrictedBooks.map(book => book._id);
+
         // חיפוש טקסט מלא במונגו (דורש אינדקס טקסט ב-Schema)
         const pages = await Page.find(
-            { $text: { $search: query } },
+            { $text: { $search: query }, book: { $nin: restrictedIds } },
             { score: { $meta: "textScore" } }
         )
         .sort({ score: { $meta: "textScore" } })

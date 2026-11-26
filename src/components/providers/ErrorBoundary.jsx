@@ -43,6 +43,8 @@ export default class ErrorBoundary extends Component {
                 נסה שוב
               </button>
               <button
+                // טעינה מלאה בכוונה: רכיב class (אין useRouter), והתאוששות מקריסה דורשת איפוס מלא של עץ React
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                 onClick={() => window.location.href = '/'}
                 className="px-6 py-2 border border-primary text-primary rounded-lg hover:bg-primary-container transition-colors"
               >

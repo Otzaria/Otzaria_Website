@@ -12,7 +12,7 @@ import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels, canApp
 import { createGithubClient, issueHtmlUrl } from './github.js';
 import { handleIssueStateChange, trustedIssueClosedAt } from './state-change.js';
 import { cleanupClosedReportPayloads } from './retention.js';
-import { planPublication } from './merge.js';
+import { isShortRunnerHangSignature, planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
 import { suggestEmailDomain } from '../emailTypo.js';
 import { normalizeEmailInput, storedEmailPattern } from '../validation-utils.js';
@@ -286,17 +286,19 @@ export async function publishReport(reportId, deps) {
 
   let plan = null;
   try {
-    // דיווח אחר עם אותה חתימה נמצא כרגע בפרסום — משאירים ממתין כדי לא ליצור issue כפול
-    const racing = leased.signatureHash
-      ? await AppReport.exists({ ...scope, signatureHash: leased.signatureHash, reportId: { $ne: reportId }, issuePending: true, issueLeaseUntil: { $gt: leaseNow } })
+    const shortRunnerHang = isShortRunnerHangSignature(leased.signature);
+    const sameSignature = { ...scope, signatureHash: leased.signatureHash, reportId: { $ne: reportId } };
+    // כשאפשר לאחד, ממתינים לדיווח עם אותה חתימה שכבר מפרסם issue.
+    const racing = leased.signatureHash && !shortRunnerHang
+      ? await AppReport.exists({ ...sameSignature, issuePending: true, issueLeaseUntil: { $gt: leaseNow } })
       : null;
 
-    const related = leased.signatureHash
-      ? await AppReport.find({
-        ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId }, 'triage.state': { $ne: 'held' },
-      })
-        .select('issueNumber issueState issueStateReason issueUrl appVersion createdAt').lean()
-      : [];
+    let related = [];
+    if (leased.signatureHash) {
+      const query = AppReport.find({ ...sameSignature, issueNumber: { $ne: null }, 'triage.state': { $ne: 'held' } });
+      if (shortRunnerHang) query.where({ issueState: 'closed' }).sort({ createdAt: -1 }).limit(1);
+      related = await query.select('issueNumber issueState issueStateReason issueUrl appVersion createdAt').lean();
+    }
     plan = planPublication(related, leased.appVersion, leased.signature);
     if (plan.action === 'suppress') {
       // מצב סגור ב-DB אינו מבטיח שה-issue עדיין קיים או שלא נפתח מחדש.

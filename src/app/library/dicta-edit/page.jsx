@@ -51,6 +51,7 @@ function LibraryEditSpaceContent() {
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
       return
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState העיקרי קורה אחרי await (setLoading(true) הסינכרוני הוא no-op בעליה)
     fetchBooks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])

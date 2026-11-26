@@ -1,5 +1,6 @@
 import { runPluginValidationJob } from './pluginValidationRunner.js'
 import otzariaValidator from 'otzaria-plugin-validator'
+import { assertPluginValidatorExports } from './pluginValidationCore.js'
 
 // --- מקורות הסמכות -----------------------------------------------------------
 // נתונים  — spec.json, מחולל בריפו של אוצריא מקבועי הקוד
@@ -9,6 +10,12 @@ import otzariaValidator from 'otzaria-plugin-validator'
 //           ל-#v1 ומתרעננת בכל בנייה, ולכן כלל חדש בוולידטור מגיע לחנות מיד.
 // מדיניות — הקובץ הזה: מה החנות חוסמת עליו וברמת חומרה איזו. ולידציית המפרט
 //           אינה יודעת דבר על החנות, והחנות אינה משכפלת את כללי המפרט.
+
+// התקנה ישנה של החבילה נכשלת כאן בהודעה ברורה ולא ב-TypeError על SPEC.
+assertPluginValidatorExports(otzariaValidator, [
+  'SPEC', 'getApiSpec', 'buildFallbackSpec', 'mergeWithFallback',
+  'validateStartupWhenConditions', 'checkDesignCompliance',
+])
 
 const {
   SPEC: PLUGIN_SDK_SPEC,

@@ -223,7 +223,6 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true, text
     const me = token.current
     if ((autoOwner && autoOwner !== me) || helpSeen()) return undefined
     autoOwner = me
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- המצב תלוי ב-localStorage, שאינו קיים ברינדור השרת
     setAuto(true)
     return () => {
       if (autoOwner === me) autoOwner = null
