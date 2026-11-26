@@ -213,6 +213,47 @@ test('[T21][T20] שינוי בקטע עצמו → PublishConflict, בלי קומ
   assert.equal(gh.headSha('main'), head);
 });
 
+// הביקורת (#312): אחרי אישור תקף הפסקה זזה, ובאינדקס הישן שורה זהה מפסקה אחרת — המקור (ישיר) או ההצעה (PR).
+const OLDP = 'באמצע הפסקה הייחודית נשארה המילה השגיאה ויש עוד מה להגיה';
+const NEWP = OLDP.replace('השגיאה', 'השגחה');
+const PBASE = ['הקדמת המחבר', 'הכרעת חכמים בעניין זה', OLDP, 'ועתה ראו חידוש נפלא', 'סיום הספר'].join('\n');
+const moved = (impostor) => ['הקדמת המחבר', 'אמרות מפרק אחר', impostor, 'תוספות', 'הכרעת חכמים בעניין זה', OLDP, 'ועתה ראו חידוש נפלא', 'סיום הספר'].join('\n');
+const pubChange = (gh) => changeFor(gh, { lineIndex: 2, originalLine: OLDP, newLine: NEWP });
+
+for (const [mode, impostor] of [['direct', OLDP], ['pr', NEWP]]) {
+  test(`הביקורת (${mode}): הפסקה זזה ובאינדקס הישן שורה זהה מפסקה אחרת → PublishConflict(source_not_resolved), בלי כתיבה ובלי "כבר תוקן"`, async () => {
+    const { gh, client } = setup({ [PATH]: PBASE });
+    const change = pubChange(gh);
+    gh.pushExternal('main', { [PATH]: moved(impostor) });
+    const head = gh.headSha('main');
+    await assert.rejects(
+      publishChange({ client, target: { branch: 'main', mode, maxRefRetries: 3 }, change, report: report(), attemptId: `pa_rv_${mode}` }),
+      (e) => e instanceof PublishConflict && e.reason === 'source_not_resolved' && e.details.target === 'target_ambiguous',
+    );
+    assert.equal(gh.headSha('main'), head);
+    assert.equal(gh.readFile('main', PATH), moved(impostor), 'השורה מהפסקה האחרת לא נערכה');
+    assert.equal(gh.calls.filter((c) => c.method !== 'GET').length, 0);
+  });
+}
+
+test('קובץ שהשתנה: הפסקה המדווחת היחידה זזה → הכתיבה במקום שאותר; תוקנה במקום אחר → already_fixed רק לפי האיתור', async () => {
+  const { gh, client } = setup({ [PATH]: PBASE });
+  const change = pubChange(gh);
+  const shiftedLines = ['שורה חדשה בראש', ...PBASE.split('\n')];
+  gh.pushExternal('main', { [PATH]: shiftedLines.join('\n') });
+  const out = await publishChange({ client, target: { branch: 'main', mode: 'direct', maxRefRetries: 3 }, change, report: report(), attemptId: 'pa_mv' });
+  assert.deepEqual([out.status, out.rebased], ['committed', true]);
+  assert.equal(gh.readFile('main', PATH), shiftedLines.map((l) => (l === OLDP ? NEWP : l)).join('\n'));
+
+  const two = setup({ [PATH]: PBASE });
+  const change2 = pubChange(two.gh);
+  two.gh.pushExternal('main', { [PATH]: ['שורה חדשה בראש', ...PBASE.split('\n').map((l) => (l === OLDP ? NEWP : l))].join('\n') });
+  const head = two.gh.headSha('main');
+  const fixed = await publishChange({ client: two.client, target: { branch: 'main', mode: 'pr', maxRefRetries: 3 }, change: change2, report: report(), attemptId: 'pa_fx' });
+  assert.equal(fixed.status, 'already_fixed');
+  assert.equal(two.gh.headSha('main'), head);
+});
+
 test('ענף שהתקדם בין הקריאה ל-PATCH → 422 → קריאה ואימות מחדש, בלי לשלב בסיס ישן', async () => {
   const { gh, client } = setup();
   let raced = false;

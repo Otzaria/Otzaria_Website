@@ -29,7 +29,8 @@ const RESOLVE_HANDOFF = {
   invalid_path: 'source_not_found',
   no_proposal: 'no_proposal',
 };
-const CONFLICT_REASONS = new Set(['source_changed', 'target_missing', 'structural_change']);
+// התנגשות במקור אחרי האישור → האישור נפסל וחוזר למתנדב. source_not_resolved: הקובץ השתנה והפסקה המדווחת לא אותרה בוודאות.
+const CONFLICT_REASONS = new Set(['source_changed', 'source_not_resolved', 'target_missing', 'structural_change']);
 
 function sourceGit(config, deps) {
   const client = createRepoClient({ repo: config.source.repo, token: config.source.token || null, fetchImpl: deps.githubFetch || fetch });
