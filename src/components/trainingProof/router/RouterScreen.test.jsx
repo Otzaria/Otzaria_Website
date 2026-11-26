@@ -242,7 +242,9 @@ describe('RouterScreen', () => {
     expect(mark.style.left).toBe('10%')
     expect(mark.style.top).toBe('20%')
     expect(mark.style.width).toBe('54%')
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    // הגלילה אל הסימון רצה ב-useEffect של FullPageDialog אחרי ה-commit שהציג את הסימון; findByTestId
+    // נפתר כבר ב-MutationObserver של ה-commit, ולכן תחת עומס ה-effect עוד לא רץ — מחכים לו במפורש.
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'center', inline: 'center' }))
     // השורה של העמוד נבחרה, והמקשים לא מסמנים מאחורי החלון
     expect(document.getElementById('tp-line-r1')).toHaveAttribute('aria-current', 'true')
     await user.keyboard('1')
