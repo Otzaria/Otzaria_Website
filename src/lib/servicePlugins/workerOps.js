@@ -6,10 +6,10 @@ import ServiceScanControl from '../../models/ServiceScanControl.js'
 import { createSystemMessage } from '../systemMessages.js'
 import {
   LEASE_SECONDS, LIMITS, RECEIPT_STAGES, FAILURE_CLASSES, nextAfterTransientFailure, nextAfterQuota,
-  validateDecision, missingReceipts,
+  validateDecision, missingReceipts, isPartialClamavReceipt, hasClamavPartialOverride, isOverriddenClamavReceipt, hasFullClamavOverride,
 } from './policy.js'
 import { newLeaseToken, hashLeaseToken, isLeaseTokenShape } from './workerAuth.js'
-import { publishReview, finalizeIfPublished, releaseScanLock, CLEARED_LEASE } from './publish.js'
+import { publishReview, finalizeIfPublished, releaseScanLock, scanLockFilter, CLEARED_LEASE } from './publish.js'
 import { syncPortReservations } from './ports.js'
 import { openReviewAssetStream } from './storage.js'
 import { exceedsJsonDepth } from '../jsonDepth.js'
@@ -85,7 +85,7 @@ export async function claimNext({ workerId, now = new Date() }) {
         fence: { $add: [{ $ifNull: ['$fence', 0] }, 1] },
       },
     }],
-    { sort: { selectedAt: 1, _id: 1 }, returnDocument: 'after', updatePipeline: true },
+    { sort: { selectedAt: 1, _id: 1 }, returnDocument: 'after', updatePipeline: true, projection: { clamavOverrideHistory: 0 } },
   ).lean()
   if (!review) {
     await releaseClaimLock()
@@ -101,7 +101,8 @@ export async function claimNext({ workerId, now = new Date() }) {
     await releaseClaimLock()
     return { ok: true, job: null }
   }
-  await ServiceScanControl.updateOne({ key: 'global', 'lock.owner': owner, 'lock.reviewId': null, 'lock.expiresAt': expiresAt }, { $set: { 'lock.reviewId': review._id } })
+  await ServiceScanControl.updateOne({ key: 'global', 'lock.owner': owner, 'lock.reviewId': null, 'lock.expiresAt': expiresAt },
+    { $set: { 'lock.reviewId': review._id, 'lock.fence': review.fence } })
   await Plugin.updateOne({ _id: review.pluginId, 'serviceState.activeReviewId': review._id }, { $set: { 'serviceState.activeFence': review.fence } })
   return { ok: true, job: await buildJob(review, token) }
 }
@@ -152,14 +153,23 @@ async function buildJob(review, token) {
       ? { reviewId: String(service._id), serviceVersion: service.serviceVersion, serviceRange: { min: service.serviceRange?.min ?? null, max: service.serviceRange?.max ?? null }, sources: sourcesOf(service) }
       : null,
     receipts: (review.receipts || []).map((r) => ({ stage: r.stage, digest: r.digest, at: r.at, data: r.data ?? null })),
+    // אישורי מנהל (בלי מזהה המנהל). clamavPartial ≠ null → מותר לשלוח קבלת clamav עם status:'partial'
+    overrides: { clamavPartial: clamavPartialOverride(review) },
   }
+}
+
+function clamavPartialOverride(review) {
+  const o = review.operatorOverrides?.clamavPartial
+  if (!o) return null
+  return { reason: o.reason ?? '', grantedAt: o.grantedAt ? new Date(o.grantedAt).toISOString() : null,
+    ...(o.scope === 'all_results' ? { scope: o.scope } : {}) }
 }
 
 async function loadLeased(reviewId, token, now) {
   if (!isId(String(reviewId ?? '')) || !isLeaseTokenShape(token)) return leaseLost()
   const review = await ServicePluginReview.findOne({
     _id: reviewId, status: 'running', 'lease.tokenHash': hashLeaseToken(token), 'lease.expiresAt': { $gt: now },
-  }).lean()
+  }).select('-clamavOverrideHistory').lean()
   return review ? { ok: true, review } : leaseLost()
 }
 
@@ -175,8 +185,8 @@ export async function heartbeat({ reviewId, token, now = new Date() }) {
   const res = await ServicePluginReview.updateOne(leaseFilter(review, now), { $set: { 'lease.expiresAt': expiresAt } })
   if (res.matchedCount !== 1) return leaseLost()
   const lock = await ServiceScanControl.updateOne(
-    { key: 'global', $or: [{ 'lock.reviewId': review._id }, { lock: null }, { 'lock.expiresAt': { $lte: now } }] },
-    { $set: { lock: { reviewId: review._id, owner: review.lease.owner, expiresAt } } },
+    scanLockFilter(review._id, review.fence),
+    { $set: { lock: { reviewId: review._id, fence: review.fence, owner: review.lease.owner, expiresAt } } },
   )
   if (lock.matchedCount !== 1) return leaseLost()
   return { ok: true, leaseExpiresAt: expiresAt }
@@ -201,6 +211,9 @@ export async function checkpoint({ reviewId, token, stage, digest, data, now = n
   if (!loaded.ok) return loaded
   const { review } = loaded
   if (digest !== review.manifestDigest) return fail(409, 'digest_mismatch')
+  // סריקה חלקית אינה "נקי": מתקבלת רק אחרי שמנהל אישר להמשיך (adminAcceptPartialScan)
+  if (isPartialClamavReceipt(stage, data) && !hasClamavPartialOverride(review)) return fail(409, 'clamav_partial_not_allowed')
+  if (isOverriddenClamavReceipt(stage, data) && !hasFullClamavOverride(review)) return fail(409, 'clamav_override_not_allowed')
   // החלפה אטומית בצד המסד: שתי קבלות מקבילות לא ידרסו זו את זו
   const receipt = { stage, digest, at: now, data: data ?? null }
   const res = await ServicePluginReview.updateOne(leaseFilter(review, now), [{
@@ -242,11 +255,11 @@ export async function reportFailure({ reviewId, token, failureClass, code, messa
     status: next.status,
     nextAttemptAt: next.nextAttemptAt ?? null,
     lease: CLEARED_LEASE,
-    lastError: { class: failureClass, code, message: (message || '').slice(0, LIMITS.reasonChars), at: now },
+    lastError: { class: failureClass, code, message: (message || '').slice(0, LIMITS.errorMessageChars), at: now },
   })
   const res = await ServicePluginReview.updateOne(leaseFilter(review, now), { $set: set })
   if (res.matchedCount !== 1) return leaseLost()
-  await releaseScanLock(review._id)
+  await releaseScanLock(review._id, review.fence)
   if (failureClass === 'quota' && next.status === 'waiting_quota') {
     await ServiceScanControl.updateOne(
       { key: 'global', $or: [{ quotaPausedUntil: null }, { quotaPausedUntil: { $lt: next.nextAttemptAt } }] },
@@ -258,6 +271,7 @@ export async function reportFailure({ reviewId, token, failureClass, code, messa
 
 async function notifyRejected(review) {
   try {
+    if (!await ServicePluginReview.exists({ _id: review._id, status: 'rejected', fence: review.fence })) return
     const plugin = await Plugin.findById(review.pluginId).select('name').lean()
     const what = review.kind === 'service' ? `השירות ${review.serviceVersion} והתוסף ${review.pluginVersion}` : `עדכון התוסף ${review.pluginVersion}`
     await createSystemMessage({
@@ -266,7 +280,7 @@ async function notifyRejected(review) {
       content: `הבדיקה של ${what} הסתיימה בדחייה.\n\nדוח הבדיקה:\n${review.report}\n\nאפשר לתקן ולהגיש הגשה חדשה מדף ניהול השירות: /plugins/${review.pluginId}/service`,
       source: 'service-plugin-review',
     })
-    await ServicePluginReview.updateOne({ _id: review._id }, { $set: { emailSentAt: new Date() } })
+    await ServicePluginReview.updateOne({ _id: review._id, status: 'rejected', fence: review.fence }, { $set: { emailSentAt: new Date() } })
   } catch (err) {
     console.error('[service-plugins] rejection notice failed:', err?.message)
   }
@@ -293,9 +307,10 @@ export async function submitResult({ reviewId, token, digest, decision, report, 
       $set: { status: 'rejected', activeKey: null, nextAttemptAt: null, lease: CLEARED_LEASE },
     })
     if (res.matchedCount !== 1) return leaseLost()
-    await Plugin.updateOne({ _id: review.pluginId, 'serviceState.activeReviewId': review._id }, { $set: { 'serviceState.activeReviewId': null } })
+    await Plugin.updateOne({ _id: review.pluginId, 'serviceState.activeReviewId': review._id, 'serviceState.activeFence': review.fence },
+      { $set: { 'serviceState.activeReviewId': null } })
     await syncPortReservations(review.pluginId)
-    await releaseScanLock(review._id)
+    await releaseScanLock(review._id, review.fence)
     await notifyRejected(decided)
     return { ok: true, status: 'rejected', published: false }
   }
@@ -305,7 +320,7 @@ export async function submitResult({ reviewId, token, digest, decision, report, 
       $set: { status: 'needs_operator', nextAttemptAt: null, lease: CLEARED_LEASE, lastError: { class: 'operator', code, message, at: now } },
     })
     if (res.matchedCount !== 1) return leaseLost()
-    await releaseScanLock(review._id)
+    await releaseScanLock(review._id, review.fence)
     return { ok: true, status: 'needs_operator', published: false }
   }
 

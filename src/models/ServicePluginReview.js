@@ -53,6 +53,21 @@ const ServicePluginReviewSchema = new mongoose.Schema({
     type: new mongoose.Schema({ reason: String, grantedBy: { type: ObjectId, ref: 'User' } }, { _id: false }),
     default: null,
   },
+  // אישורי מנהל להמשך הבדיקה למרות תקלה תפעולית מסוימת. נשמרים לתיעוד גם אחרי הפרסום.
+  operatorOverrides: {
+    // ללא scope: הרשאת limits ישנה בלבד; all_results: אישור מפורש לכל תוצאת ClamAV.
+    clamavPartial: {
+      type: new mongoose.Schema({ reason: String, grantedBy: { type: ObjectId, ref: 'User' }, grantedAt: Date,
+        scope: { type: String, enum: ['all_results'] }, grantId: String }, { _id: false }),
+      default: null,
+    },
+  },
+  // תיעוד מנהלים בלבד: סיבות ואסמכתאות קודמות נשמרות גם כשהקבלה נבדקת מחדש.
+  clamavOverrideHistory: { type: [Mixed], default: [] },
+  // כוונת פתיחה מחדש, לתיקון כתיבה שנקטעה ב-MongoDB standalone.
+  reopeningClamav: { type: new mongoose.Schema({ token: String, at: Date }, { _id: false }), default: null },
+  // מחזור חיים של אותו מזהה: claim משנה fence, פתיחה מדחייה משנה גם generation.
+  reopenGeneration: { type: Number, default: 0 },
   attempts: { type: Number, default: 0 },
   unknownQuotaWaits: { type: Number, default: 0 },
   // נפרד מ-attempts: lease אחד יכול לפוג כדין (שער שבת), אך פקיעות חוזרות הן לולאת קריסה
@@ -70,6 +85,7 @@ const ServicePluginReviewSchema = new mongoose.Schema({
   decidedAt: { type: Date, default: null },
   publishedAt: { type: Date, default: null },
   filesDeletedAt: { type: Date, default: null },
+  filesDeletingAt: { type: Date, default: null },
   nativeFilesDeletedAt: { type: Date, default: null },
   lastError: {
     type: new mongoose.Schema({

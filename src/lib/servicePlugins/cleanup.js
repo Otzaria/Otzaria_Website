@@ -6,6 +6,7 @@ import { deleteReviewFiles, sweepTmpFiles } from './storage.js'
 import { finalizeIfPublished } from './publish.js'
 import { syncPortReservations } from './ports.js'
 import { cancelReview } from './reviews.js'
+import { releaseClamavReopen } from './clamavOverride.js'
 
 const HOUR = 3600_000
 const DAY = 24 * HOUR
@@ -58,27 +59,36 @@ export async function runServicePluginCleanup(now = new Date()) {
 
   await safely(summary, 'orphan locks', async () => {
     const cutoff = new Date(now - ORPHAN_LOCK_MS)
+    const reopening = await ServicePluginReview.find({ status: 'rejected', 'reopeningClamav.at': { $lt: cutoff } }).lean()
+    for (const review of reopening) await releaseClamavReopen(review, review.reopeningClamav.token)
     const locked = await Plugin.find({ hasService: true, 'serviceState.activeReviewId': { $ne: null }, updatedAt: { $lt: cutoff } })
-      .select('serviceState.activeReviewId').lean()
+      .select('serviceState.activeReviewId serviceState.activeFence').lean()
     for (const plugin of locked) {
       const reviewId = plugin.serviceState.activeReviewId
       const review = await ServicePluginReview.findById(reviewId).select('status updatedAt').lean()
       if (review && (ACTIVE_STATUSES.includes(review.status) || review.updatedAt >= cutoff)) continue
-      const res = await Plugin.updateOne({ _id: plugin._id, 'serviceState.activeReviewId': reviewId }, { $set: { 'serviceState.activeReviewId': null } })
+      // פתיחה מחדש משתמשת באותו reviewId עם fence חדש; רשימת ניקוי ישנה אינה רשאית לשחרר אותו.
+      const res = await Plugin.updateOne({ _id: plugin._id, 'serviceState.activeReviewId': reviewId,
+        'serviceState.activeFence': plugin.serviceState.activeFence }, { $set: { 'serviceState.activeReviewId': null } })
       summary.releasedLocks += res.modifiedCount
     }
   })
 
   await safely(summary, 'terminal files', async () => {
     const cutoff = new Date(now - 7 * DAY)
-    const old = await ServicePluginReview.find({
-      filesDeletedAt: null,
+    const expired = {
+      filesDeletedAt: null, reopeningClamav: null,
       $or: [
         { status: 'cancelled', $or: [{ cancelledAt: { $lt: cutoff } }, { cancelledAt: null, updatedAt: { $lt: cutoff } }] },
         { status: 'rejected', $or: [{ decidedAt: { $lt: cutoff } }, { decidedAt: null, updatedAt: { $lt: cutoff } }] },
       ],
-    }).select('_id').lean()
+    }
+    const old = await ServicePluginReview.find(expired).select('_id fence').lean()
     for (const review of old) {
+      // CAS מול פתיחה מחדש: לא מוחקים על סמך רשימת מועמדים שנקראה לפני אישור מנהל.
+      const deleting = await ServicePluginReview.updateOne({ ...expired, _id: review._id, fence: review.fence },
+        { $set: { filesDeletingAt: now } })
+      if (deleting.matchedCount !== 1) continue
       await deleteReviewFiles(review._id)
       await ServicePluginReview.updateOne({ _id: review._id, filesDeletedAt: null }, { $set: { filesDeletedAt: now } })
       summary.deletedReviewFiles++

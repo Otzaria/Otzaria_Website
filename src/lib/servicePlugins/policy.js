@@ -19,7 +19,19 @@ export const LIMITS = Object.freeze({
   changeNotesChars: 2000,
   uninstallChars: 2000,
   reasonChars: 500,
+  // הודעת תקלה מהבודק (lastError.message) — ארוכה מסיבת מנהל: clamav_incomplete מפרט קבצים וחתימות
+  errorMessageChars: 4000,
 })
+
+/** קבלת ClamAV של סריקה שלא הושלמה; מתקבלת רק אחרי אישור מנהל (operatorOverrides.clamavPartial). */
+export const isPartialClamavReceipt = (stage, data) => stage === 'clamav' && data?.status === 'partial'
+export const hasClamavPartialOverride = (review) => !!review?.operatorOverrides?.clamavPartial
+export const isOverriddenClamavReceipt = (stage, data) => stage === 'clamav' && data?.status === 'overridden'
+export const hasFullClamavOverride = (review) => review?.operatorOverrides?.clamavPartial?.scope === 'all_results'
+// ביטול/אובדן lease אינם תוצאת סריקה, ואינם ניתנים לעקיפה.
+export const CLAMAV_OVERRIDE_CODES = Object.freeze(['clamav_incomplete', 'clamav_error', 'clamav_output_unparsed', 'clamav_unavailable', 'clamav_timeout'])
+export const canOverrideClamavFailure = (review) => ['needs_operator', 'retry_wait'].includes(review?.status)
+  && CLAMAV_OVERRIDE_CODES.includes(review?.lastError?.code)
 
 export const SERVICE_COOLDOWN_DAYS = 21
 export const LEASE_SECONDS = 120
@@ -70,7 +82,7 @@ const TRANSITIONS = {
   waiting_quota: ['running', 'cancelled'],
   needs_operator: ['queued', 'cancelled'],
   approved: [],
-  rejected: [],
+  rejected: ['queued'], // רק פתיחה מחדש מבוקרת של דחיית ClamAV בידי מנהל
   cancelled: [],
 }
 
@@ -463,9 +475,11 @@ export function cooldownState(lastServiceCycleStartedAt, now = new Date()) {
 export function missingReceipts(review) {
   const required = REQUIRED_RECEIPTS[review?.kind] || REQUIRED_RECEIPTS.service
   const receipts = review?.receipts || []
-  // קבלת דחייה של שלב קבוע אינה מעבר שלו, גם אם הגיעה החלטה 1
+  // קבלת דחייה של שלב קבוע אינה מעבר שלו, גם אם הגיעה החלטה 1; סריקת ClamAV חלקית — רק באישור מנהל
+  const partialOk = hasClamavPartialOverride(review)
   return required.filter((stage) => !receipts.some((r) => r.stage === stage && !!review.manifestDigest && r.digest === review.manifestDigest
-    && r.data?.rejected !== true))
+    && r.data?.rejected !== true && (partialOk || !isPartialClamavReceipt(r.stage, r.data))
+    && (hasFullClamavOverride(review) || !isOverriddenClamavReceipt(r.stage, r.data))))
 }
 
 /** תשובת הבודק: {decision:0|1, report} — report מחרוזת לא ריקה עד 64KiB. */

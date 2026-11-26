@@ -6,16 +6,19 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Ltr from '@/components/ui/Ltr'
+import ClamavPartialNote from '@/components/plugins/service/ClamavPartialNote'
 import { KIND_LABELS, statusMeta } from '@/components/plugins/service/serviceSubmissionLogic'
 import { formatDateWithTime } from '@/lib/formatDate'
-import { ADMIN_STATUS_LABELS, ERROR_CLASS_LABELS, type AdminAction, type AdminReview } from './servicePluginsAdminLogic'
+import { ADMIN_STATUS_LABELS, ERROR_CLASS_LABELS, isClamavIncomplete, partialScanNote, type AdminAction, type AdminReview } from './servicePluginsAdminLogic'
 
 const ACTION_LABELS: Record<AdminAction, string> = {
   start: 'אשר והתחל בדיקה',
   emergency: 'חריגת חירום (21 יום)',
   retry: 'נסה שוב',
   cancel: 'בטל הגשה',
-  rollback: 'חזור לגרסה הקודמת'
+  rollback: 'חזור לגרסה הקודמת',
+  accept_partial_scan: 'המשך למרות סריקה חלקית',
+  accept_clamav_result: 'המשך למרות תוצאת ClamAV'
 }
 
 const ACTION_ICONS: Record<AdminAction, string> = {
@@ -23,15 +26,17 @@ const ACTION_ICONS: Record<AdminAction, string> = {
   emergency: 'lock_open',
   retry: 'restart_alt',
   cancel: 'cancel',
-  rollback: 'undo'
+  rollback: 'undo',
+  accept_partial_scan: 'rule',
+  accept_clamav_result: 'rule'
 }
 
-const ACTION_VARIANTS = { start: 'filled', emergency: 'tonal', retry: 'tonal', cancel: 'text', rollback: 'outlined' } as const
+const ACTION_VARIANTS = { start: 'filled', emergency: 'tonal', retry: 'tonal', cancel: 'text', rollback: 'outlined', accept_partial_scan: 'outlined', accept_clamav_result: 'outlined' } as const
 
 const NOT_SUBMITTED = ['draft', 'sealing']
 
 /** פרטי התקלה כפי שהשרת כתב אותם (באנגלית) — מאחורי "פרטים טכניים", עם העתקה לאחראי השרת */
-function TechnicalDetails({ review }: { review: AdminReview }) {
+function TechnicalDetails({ review, showMessage = true }: { review: AdminReview; showMessage?: boolean }) {
   const [copied, setCopied] = useState(false)
   const error = review.lastError
   if (!error) return null
@@ -49,7 +54,7 @@ function TechnicalDetails({ review }: { review: AdminReview }) {
       <summary className="cursor-pointer text-label-lg">פרטים טכניים</summary>
       <p className="mt-1 [overflow-wrap:anywhere]" dir="ltr">
         <span className="font-mono">{error.code}</span>
-        {error.message ? <> — {error.message}</> : null}
+        {showMessage && error.message ? <> — {error.message}</> : null}
       </p>
       <Button variant="text" size="sm" icon={copied ? 'check' : 'content_copy'} onClick={copy} className="mt-1">
         {copied ? 'הועתק' : 'העתק פרטים לאחראי השרת'}
@@ -68,6 +73,7 @@ export default function ServiceReviewAdminCard({ review, actions, busyAction, on
 }) {
   const operatorError = review.status === 'needs_operator' || review.lastError?.class === 'operator'
   const meta = statusMeta(review.status)
+  const partial = partialScanNote(review)
   return (
     <Card as="li" padding="md" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -100,12 +106,30 @@ export default function ServiceReviewAdminCard({ review, actions, busyAction, on
         </p>
       )}
 
-      {operatorError && (
+      {review.clamavIssue ? (
+        <div role="note" className="rounded-(--radius-control) bg-warning-container p-3 text-body-sm text-on-warning-container">
+          <p>תוצאת ClamAV דורשת החלטה. אפשר לאשר חריגה מנומקת גם כשהתגלה ממצא או כשהסריקה נכשלה; שאר שלבי הבדיקה ימשיכו כרגיל.</p>
+          <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere]" dir="auto">{review.clamavIssue.message}</p>
+        </div>
+      ) : operatorError && (isClamavIncomplete(review) ? (
+        <div role="note" className="rounded-(--radius-control) bg-warning-container p-3 text-body-sm text-on-warning-container">
+          <p>
+            סריקת ClamAV לא הושלמה: בחלק מהקבצים הסורק חרג מהמגבלות שלו, וסריקה חלקית אינה &quot;נקי&quot;. &quot;נסה שוב&quot; ייכשל
+            {' '}שוב באותו אופן, אלא אם אחראי השרת הגדיל את המגבלות. אפשר לבטל, או להמשיך למרות הסריקה החלקית — עם סיבה.
+          </p>
+          {review.lastError?.message ? (
+            <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere]" dir="auto">{review.lastError.message}</p>
+          ) : null}
+          <TechnicalDetails review={review} showMessage={false} />
+        </div>
+      ) : (
         <div role="note" className="rounded-(--radius-control) bg-warning-container p-3 text-body-sm text-on-warning-container">
           <p>הבדיקה נעצרה בגלל תקלה אצלנו, לא בגלל התוסף. העבר את הפרטים לאחראי השרת, ואחרי התיקון — &quot;נסה שוב&quot;.</p>
           <TechnicalDetails review={review} />
         </div>
-      )}
+      ))}
+
+      {partial && <ClamavPartialNote {...partial} />}
 
       {!operatorError && review.lastError && !['approved', 'rejected', 'cancelled'].includes(review.status) && (
         <div className="text-body-sm text-on-surface-variant">

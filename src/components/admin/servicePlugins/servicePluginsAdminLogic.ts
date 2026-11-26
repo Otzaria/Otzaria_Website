@@ -1,7 +1,16 @@
 // לוגיקה טהורה של לשונית "תוספי שירות" בניהול התוספים: מבנה GET /api/service-plugins/admin, קיבוץ
 // ההגשות לפי מה שהמנהל צריך לעשות, והפעולות שמותרות לכל הגשה. טסט: servicePluginsAdminLogic.test.ts.
 
-export type AdminAction = 'start' | 'cancel' | 'retry' | 'emergency' | 'rollback'
+export type AdminAction = 'start' | 'cancel' | 'retry' | 'emergency' | 'rollback' | 'accept_partial_scan' | 'accept_clamav_result'
+
+/** פעולות שדורשות סיבה בחלון (ולא אישור רגיל) */
+export type ReasonAction = Extract<AdminAction, 'emergency' | 'accept_partial_scan' | 'accept_clamav_result'>
+
+export interface ClamavPartialOverride {
+  reason: string
+  grantedAt: string | null
+  scope?: 'all_results'
+}
 
 export interface AdminReview {
   id: string
@@ -18,6 +27,12 @@ export interface AdminReview {
   nextAttemptAt: string | null
   lastError: { class: string; code: string; message: string } | null
   decision: 0 | 1 | null
+  /** אישורי מנהל להמשך למרות תקלה תפעולית (חסר בשרת ישן) */
+  operatorOverrides?: { clamavPartial: ClamavPartialOverride | null }
+  /** קבלת ClamAV של ההגשה היא סריקה חלקית (נשמרה אחרי אישור מנהל) */
+  clamavPartialReceipt?: boolean
+  /** תוצאה שהשרת מאפשר למנהל להחריג, כולל זיהוי/שגיאת סורק. */
+  clamavIssue?: { code: string; message: string } | null
   cooldown: { blocked: boolean; nextAllowedAt: string | null }
   adminException: boolean
   canRollback: boolean
@@ -68,11 +83,30 @@ export function rollbackReviewIds(reviews: AdminReview[]): Set<string> {
   return ids
 }
 
+/** נעצר כי ClamAV לא השלים את הסריקה (חריגה ממגבלות הסורק) — ניסיון חוזר ייכשל שוב באותו אופן */
+export function isClamavIncomplete(review: AdminReview): boolean {
+  return review.status === 'needs_operator' && review.lastError?.code === 'clamav_incomplete'
+}
+
+/**
+ * הערת "סריקה חלקית אושרה ידנית": scanned — קבלת ClamAV החלקית כבר נשמרה; אחרת האישור ניתן והבדיקה טרם הגיעה לשלב.
+ * null כשאין אישור וגם אין קבלה חלקית.
+ */
+export function partialScanNote(review: AdminReview): { scanned: boolean; reason: string | null; grantedAt: string | null; full?: boolean } | null {
+  const override = review.operatorOverrides?.clamavPartial ?? null
+  const scanned = review.clamavPartialReceipt === true
+  if (!override && !scanned) return null
+  return { scanned, reason: override?.reason || null, grantedAt: override?.grantedAt ?? null,
+    ...(override?.scope === 'all_results' ? { full: true } : {}) }
+}
+
 /** הפעולות שמוצגות להגשה. השרת בודק שוב כל פעולה. */
 export function adminActionsFor(review: AdminReview, rollbackIds: Set<string> = new Set()): AdminAction[] {
   const actions: AdminAction[] = []
   if (review.status === 'pending_admin') actions.push(needsException(review) ? 'emergency' : 'start')
   if (review.status === 'needs_operator') actions.push('retry')
+  if (review.clamavIssue) actions.push('accept_clamav_result')
+  else if (isClamavIncomplete(review)) actions.push('accept_partial_scan') // תאימות לשרת ישן
   if (!TERMINAL.includes(review.status)) actions.push('cancel')
   if (rollbackIds.has(review.id)) actions.push('rollback')
   return actions

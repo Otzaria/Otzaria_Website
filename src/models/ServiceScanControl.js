@@ -6,6 +6,7 @@ const ServiceScanControlSchema = new mongoose.Schema({
   lock: {
     type: new mongoose.Schema({
       reviewId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      fence: { type: Number, default: null },
       owner: { type: String, default: null },
       expiresAt: { type: Date, default: null },
     }, { _id: false }),

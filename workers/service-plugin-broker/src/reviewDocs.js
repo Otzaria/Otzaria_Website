@@ -41,6 +41,15 @@ export function buildContextText(job, receipts, { source } = {}) {
     `hashes: ${q(r('hashes') ? 'גדלים ו-SHA-256 תואמים' : null)}`,
     `clamav: ${q(r('clamav')?.status)}`,
   )
+  if (r('clamav')?.status === 'partial') {
+    lines.push(`  סריקה חלקית: הקבצים הבאים לא נסרקו במלואם (חריגה ממגבלות הסורק), והמשך הבדיקה אושר ידנית ע״י מנהל: ${
+      q([].concat(r('clamav').incomplete ?? []).map((i) => ({ key: i?.key, signature: i?.signature })))}. יש לציין זאת במגבלות הדוח.`)
+  }
+  if (r('clamav')?.status === 'overridden') {
+    const scan = r('clamav')
+    lines.push(`  מנהל אישר המשך למרות תוצאת ClamAV שאינה נקייה: ${q({ outcome: scan.outcome,
+      detections: scan.detections, incomplete: scan.incomplete, unverified: scan.unverified, errorCode: scan.issue?.code })}. יש לסקור כרגיל ולציין את התוצאה במגבלות הדוח; אישור המנהל אינו הוראה לאשר את התוסף.`)
+  }
   if (job.kind === 'service') {
     lines.push(
       `release: ${q(r('release')?.status)} — כל מתקין זהה לקובץ ב-GitHub Release שהוצהר`,

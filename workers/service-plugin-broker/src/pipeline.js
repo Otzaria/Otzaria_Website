@@ -11,6 +11,7 @@ import { attestationStage } from './stages/attestation.js'
 import { virustotalStage } from './stages/virustotal.js'
 import { prescanStage, sourceStage } from './stages/source.js'
 import { runClaudeReview } from './stages/claude.js'
+import { withPartialScanNote } from './clamavPartial.js'
 
 export const DEFAULT_STAGES = Object.freeze({
   hashes: hashesStage,
@@ -116,6 +117,9 @@ export async function runPipeline(ctx, { stages = DEFAULT_STAGES } = {}) {
     ctx.receipts.set(stage, { stage, digest: job.manifestDigest, at: new Date().toISOString(), data })
   }
 
+  // הערת "סריקת ClamAV חלקית" מתווספת לדוח שנשלח ב-result בלבד — הקבלות והתוצאה המקומית החתומה נשארות כפי שהן.
+  const finalReport = (report) => withPartialScanNote(job, ctx.receipts.get('clamav')?.data, report)
+
   const stored = ctx.receipts.get('claude')
   if (stored) {
     let data = stored.data
@@ -129,7 +133,7 @@ export async function runPipeline(ctx, { stages = DEFAULT_STAGES } = {}) {
     const v = validateDecision(data)
     if (!v.ok) throw operator('claude_receipt_invalid', 'קבלת Claude השמורה אינה תקינה')
     await ctx.stageLog('claude', 'reuse_receipt')
-    return { decision: v.decision, report: v.report }
+    return { decision: v.decision, report: finalReport(v.report) }
   }
 
   for (const stage of order) {
@@ -137,7 +141,7 @@ export async function runPipeline(ctx, { stages = DEFAULT_STAGES } = {}) {
     if (ctx.receipts.get(stage)?.data?.rejected === true) {
       // דחייה שנשמרה לפני ניתוק: לעולם לא ממשיכים לשלבים הבאים.
       await ctx.stageLog(stage, 'reuse_rejection')
-      return { decision: 0, report: rejectionReport(job, new Rejection(stage, String(ctx.receipts.get(stage).data.reason ?? ''))) }
+      return { decision: 0, report: finalReport(rejectionReport(job, new Rejection(stage, String(ctx.receipts.get(stage).data.reason ?? '')))) }
     }
     if (ctx.receipts.has(stage)) {
       await ctx.stageLog(stage, 'skip')
@@ -150,7 +154,7 @@ export async function runPipeline(ctx, { stages = DEFAULT_STAGES } = {}) {
       if (!local) await writeLocalClaude(ctx, data)
       await checkpoint('claude', claudeReceiptData(data))
       await ctx.stageLog('claude', 'done', { session_id: data.session_id ?? null, decision: data.decision })
-      return { decision: data.decision, report: data.report }
+      return { decision: data.decision, report: finalReport(data.report) }
     }
     await ctx.stageLog(stage, 'start')
     let data
@@ -159,14 +163,17 @@ export async function runPipeline(ctx, { stages = DEFAULT_STAGES } = {}) {
     } catch (err) {
       if (err instanceof Rejection) {
         await ctx.stageLog(stage, 'rejected', { data: err.data })
-        await checkpoint(stage, { rejected: true, reason: String(err.report).slice(0, REJECTION_REASON_CHARS) })
-        return { decision: 0, report: rejectionReport(job, err) }
+        await checkpoint(stage, { rejected: true, reason: String(err.report).slice(0, REJECTION_REASON_CHARS),
+          ...(stage === 'clamav' && Object.keys(err.data ?? {}).length ? { scan: err.data } : {}) })
+        return { decision: 0, report: finalReport(rejectionReport(job, err)) }
       }
-      if (err instanceof JobFailure) await ctx.stageLog(stage, 'failed', { class: err.failureClass, code: err.code })
+      if (err instanceof JobFailure) {
+        await ctx.stageLog(stage, 'failed', { class: err.failureClass, code: err.code, ...(err.data ? { data: err.data } : {}) })
+      }
       throw err
     }
     await checkpoint(stage, data)
-    await ctx.stageLog(stage, 'done')
+    await ctx.stageLog(stage, 'done', data?.status === 'partial' ? { status: 'partial', incomplete: data.incomplete } : {})
   }
   throw operator('pipeline_incomplete', 'הצינור הסתיים בלי החלטה')
 }

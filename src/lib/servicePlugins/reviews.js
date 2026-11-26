@@ -12,9 +12,10 @@ import {
 } from './policy.js'
 import { findPortConflict, portKeys, portTaken, isPortDuplicate, syncPortReservations } from './ports.js'
 import { readReviewAssetBuffer, deleteReviewFiles } from './storage.js'
-import { finalizeIfPublished, releaseScanLock, CLEARED_LEASE } from './publish.js'
+import { finalizeIfPublished, releaseScanLock, scanLockFilter, CLEARED_LEASE } from './publish.js'
 
 export { publishReview, finalizeIfPublished, rollback } from './publish.js'
+export { adminAcceptClamavResult } from './clamavOverride.js'
 export { claimNext, heartbeat, checkpoint, reportFailure, submitResult, maintenanceKeepList, openWorkerAsset } from './workerOps.js'
 
 const { ObjectId } = mongoose.Types
@@ -247,9 +248,9 @@ async function discardReviewFiles(reviewId, now) {
 async function releaseScanLockAfterCancel(reviewId, previous, now) {
   const until = previous?.status === 'running' ? previous.lease?.expiresAt : null
   if (until && until > now) {
-    await ServiceScanControl.updateOne({ key: 'global', 'lock.reviewId': reviewId }, { $set: { 'lock.expiresAt': until } })
+    await ServiceScanControl.updateOne(scanLockFilter(reviewId, previous.fence), { $set: { 'lock.expiresAt': until } })
   } else {
-    await releaseScanLock(reviewId)
+    await releaseScanLock(reviewId, previous.fence)
   }
 }
 
@@ -266,31 +267,42 @@ export async function cancelReview({ review, by = null, reason = null, asAdmin =
     status: 'cancelled', activeKey: null, nextAttemptAt: null, lease: CLEARED_LEASE,
     cancelledBy: by ?? null, cancelReason: typeof reason === 'string' ? reason.slice(0, LIMITS.reasonChars) : null, cancelledAt: now,
   }
+  // מסמכים שקדמו לפתיחה מחדש (שדה חסר/null) שייכים למחזור 0.
+  const generation = (review.reopenGeneration ?? 0) === 0 ? { $in: [null, 0] } : review.reopenGeneration
   if (PRE_QUEUE.includes(review.status)) {
-    const res = await ServicePluginReview.updateOne({ _id: review._id, status: { $in: asAdmin ? PRE_QUEUE : OWNER_CANCELLABLE } }, { $set: set, $inc: { fence: 1 } })
+    const res = await ServicePluginReview.updateOne({ _id: review._id, status: { $in: asAdmin ? PRE_QUEUE : OWNER_CANCELLABLE },
+      reopenGeneration: generation }, { $set: set, $inc: { fence: 1 } })
     if (res.modifiedCount !== 1) return fail(409, 'invalid_state', 'מצב ההגשה השתנה; רעננו ונסו שוב')
     await releasePluginLock(review.pluginId, review._id)
     await discardReviewFiles(review._id, now)
     return { ok: true, status: 'cancelled' }
   }
 
-  const unlocked = await Plugin.updateOne(
-    { _id: review.pluginId, 'serviceState.activeReviewId': review._id },
+  // קודם מצלמים את נעילת Plugin, ורק אז מאמתים את מחזור ההגשה. כך ביטול ישן
+  // אינו משחרר פתיחה חדשה של אותו ID, ו-claim שקידם fence בתוך אותו מחזור עדיין ניתן לביטול.
+  const pluginLock = await Plugin.findOne({ _id: review.pluginId, 'serviceState.activeReviewId': review._id })
+    .select('serviceState.activeFence').lean()
+  if (!await ServicePluginReview.exists({ _id: review._id, status: { $in: ACTIVE_STATUSES }, reopenGeneration: generation })) {
+    return fail(409, 'invalid_state', 'מצב ההגשה השתנה; רעננו ונסו שוב')
+  }
+  const unlocked = pluginLock && await Plugin.updateOne(
+    { _id: review.pluginId, 'serviceState.activeReviewId': review._id, 'serviceState.activeFence': pluginLock.serviceState.activeFence },
     { $set: { 'serviceState.activeReviewId': null }, $inc: { 'serviceState.activeFence': 1 } },
   )
-  if (unlocked.modifiedCount !== 1) {
+  if (unlocked?.modifiedCount !== 1) {
     // ייתכן שהבודק פרסם בינתיים: finalizeIfPublished בודק לפי מצביעי Plugin, לא לפי העותק שבידינו
     const fin = await finalizeIfPublished(review, { now })
     if (fin.published) return fail(409, 'already_published', 'ההגשה כבר פורסמה ואי אפשר לבטל אותה')
+    return fail(409, 'invalid_state', 'נעילת ההגשה השתנתה; רעננו ונסו שוב')
   }
   const previous = await ServicePluginReview.findOneAndUpdate(
-    { _id: review._id, status: { $in: ACTIVE_STATUSES } },
+    { _id: review._id, status: { $in: ACTIVE_STATUSES }, reopenGeneration: generation },
     { $set: set, $inc: { fence: 1 } },
-    { returnDocument: 'before', projection: { status: 1, lease: 1 } },
+    { returnDocument: 'before', projection: { status: 1, lease: 1, fence: 1 } },
   ).lean()
+  if (!previous) return fail(409, 'invalid_state', 'ההגשה כבר הסתיימה או נפתחה מחדש')
   await syncPortReservations(review.pluginId)
   await releaseScanLockAfterCancel(review._id, previous, now)
-  if (!previous) return fail(409, 'invalid_state', 'ההגשה כבר הסתיימה')
   return { ok: true, status: 'cancelled' }
 }
 
@@ -350,11 +362,37 @@ export async function adminStart({ plugin, review, admin, now = new Date() }) {
   return { ok: true, status: 'queued', exceptionUsed: !!exceptionUsed }
 }
 
+// חזרה לתור מטיפול תפעולי — משותף לניסיון חוזר ולהמשך למרות סריקה חלקית
+const requeueFromOperator = (now) => ({
+  status: 'queued', attempts: 0, unknownQuotaWaits: 0, leaseExpiries: 0, nextAttemptAt: now, lastError: null, lease: CLEARED_LEASE,
+})
+
 export async function adminRetry({ review, now = new Date() }) {
   if (review.status !== 'needs_operator') return fail(409, 'invalid_state', 'ניסיון חוזר אפשרי רק להגשה שממתינה לטיפול תפעולי')
   const res = await ServicePluginReview.updateOne(
-    { _id: review._id, status: 'needs_operator' },
-    { $set: { status: 'queued', attempts: 0, unknownQuotaWaits: 0, leaseExpiries: 0, nextAttemptAt: now, lastError: null, lease: CLEARED_LEASE } },
+    { _id: review._id, status: 'needs_operator', fence: review.fence },
+    { $set: requeueFromOperator(now) },
+  )
+  if (res.modifiedCount !== 1) return fail(409, 'invalid_state', 'ההגשה השתנתה בזמן הפעולה')
+  return { ok: true, status: 'queued' }
+}
+
+/**
+ * המשך הבדיקה למרות סריקת ClamAV חלקית (clamav_incomplete), עם סיבה. האישור נשמר בהגשה ומועבר למתווך
+ * (job.overrides.clamavPartial), שרשאי אז לשלוח קבלת clamav חלקית; שאר השלבים רצים כרגיל.
+ */
+export async function adminAcceptPartialScan({ review, admin, reason, now = new Date() }) {
+  if (review.status !== 'needs_operator' || review.lastError?.code !== 'clamav_incomplete') {
+    return fail(409, 'invalid_state', 'אפשר להמשיך למרות סריקה חלקית רק להגשה שנעצרה כי סריקת ClamAV לא הושלמה')
+  }
+  const text = typeof reason === 'string' ? reason.trim() : ''
+  if (!text || text.length > LIMITS.reasonChars) return fail(400, 'reason_required', `יש לכתוב סיבה להמשך למרות הסריקה החלקית (עד ${LIMITS.reasonChars} תווים)`)
+  const res = await ServicePluginReview.updateOne(
+    { _id: review._id, status: 'needs_operator', fence: review.fence, 'lastError.code': 'clamav_incomplete' },
+    { $set: {
+      ...requeueFromOperator(now),
+      'operatorOverrides.clamavPartial': { reason: text, grantedBy: admin?._id ?? admin?.id ?? null, grantedAt: now },
+    } },
   )
   if (res.modifiedCount !== 1) return fail(409, 'invalid_state', 'ההגשה השתנתה בזמן הפעולה')
   return { ok: true, status: 'queued' }

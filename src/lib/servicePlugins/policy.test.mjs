@@ -197,7 +197,7 @@ test('מכונת המצבים', () => {
   assert.ok(canTransition('running', 'waiting_quota'))
   assert.ok(canTransition('needs_operator', 'queued'))
   assert.ok(!canTransition('approved', 'running'))
-  assert.ok(!canTransition('rejected', 'queued'))
+  assert.ok(canTransition('rejected', 'queued')) // תחום לחריגת ClamAV מאומתת בפעולת המנהל
   assert.ok(!canTransition('draft', 'queued'))
   for (const s of ACTIVE_STATUSES) assert.ok(canTransition(s, 'cancelled'), s)
   assert.deepEqual(STATUSES.filter((s) => !ACTIVE_STATUSES.includes(s)), ['approved', 'rejected', 'cancelled'])
@@ -251,6 +251,25 @@ test('missingReceipts: רק קבלות עם אותו digest נחשבות', () =>
 test('missingReceipts: קבלת דחייה אינה נחשבת מעבר של השלב', () => {
   const receipts = REQUIRED_RECEIPTS.plugin.map((stage) => ({ stage, digest: 'd1', data: stage === 'clamav' ? { rejected: true, reason: 'x' } : {} }))
   assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts }), ['clamav'])
+})
+
+test('missingReceipts: קבלת ClamAV חלקית נחשבת רק באישור מנהל (operatorOverrides.clamavPartial)', () => {
+  const receipts = REQUIRED_RECEIPTS.plugin.map((stage) => ({ stage, digest: 'd1', data: stage === 'clamav' ? { status: 'partial' } : {} }))
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts }), ['clamav'])
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts, operatorOverrides: { clamavPartial: null } }), ['clamav'])
+  const operatorOverrides = { clamavPartial: { reason: 'קובץ ענק', grantedAt: new Date() } }
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts, operatorOverrides }), [])
+  // status:'partial' בשלב אחר אינו סריקה חלקית
+  const other = REQUIRED_RECEIPTS.plugin.map((stage) => ({ stage, digest: 'd1', data: stage === 'source' ? { status: 'partial' } : {} }))
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts: other }), [])
+})
+
+test('missingReceipts: overridden מחייב הרשאה מלאה, ואינו מרחיב אישור limits ישן', () => {
+  const receipts = REQUIRED_RECEIPTS.plugin.map((stage) => ({ stage, digest: 'd1', data: stage === 'clamav' ? { status: 'overridden', outcome: 'detected' } : {} }))
+  const review = { kind: 'plugin', manifestDigest: 'd1', receipts }
+  assert.deepEqual(missingReceipts(review), ['clamav'])
+  assert.deepEqual(missingReceipts({ ...review, operatorOverrides: { clamavPartial: { reason: 'legacy' } } }), ['clamav'])
+  assert.deepEqual(missingReceipts({ ...review, operatorOverrides: { clamavPartial: { scope: 'all_results', reason: 'explicit' } } }), [])
 })
 
 

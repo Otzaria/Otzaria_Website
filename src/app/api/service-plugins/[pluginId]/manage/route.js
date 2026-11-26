@@ -27,7 +27,9 @@ export async function GET(request, { params }) {
       res.headers.set('cache-control', NO_STORE['cache-control'])
       return res
     }
-    return json({ ...(await getManageView(plugin, { enabled: true })), viewerIsOwner })
+    // הערות מנהל (אישור סריקה חלקית) — רק לצופה בעל הרשאת ניהול תוספים, לא לבעלים
+    const adminNotes = hasPluginsAccess(session.user)
+    return json({ ...(await getManageView(plugin, { enabled: true, adminNotes })), viewerIsOwner })
   } catch (err) {
     return errorResponse(err, 'manage')
   }
