@@ -53,13 +53,14 @@ export async function fetchBookDetails(path) {
   return { book: data.book || {}, pages: Array.isArray(data.pages) ? data.pages : [] }
 }
 
-/** הנחיות העריכה של ספר ועמוד הדוגמה */
-export function saveBookInstructions(bookId, { editingInfo, examplePage }) {
-  return requestJson('/api/book/update-info', { method: 'POST', body: { bookId, editingInfo, examplePage }, fallback: 'לא הצלחנו לשמור את ההנחיות.' })
+/** הנחיות העריכה של ספר, עמוד הדוגמה, ושאלות בסיום עמוד (כשנשלחו — אחרת השרת לא נוגע בהן) */
+export function saveBookInstructions(bookId, { editingInfo, examplePage, finishQuestions }) {
+  return requestJson('/api/book/update-info', { method: 'POST', body: { bookId, editingInfo, examplePage, finishQuestions }, fallback: 'לא הצלחנו לשמור את ההנחיות.' })
 }
 
-export function saveGlobalInstructions(instructions) {
-  return requestJson('/api/admin/books/global-instructions', { method: 'POST', body: { instructions }, fallback: 'לא הצלחנו לשמור את ההנחיות הכלליות.' })
+/** ההנחיות הכלליות, ושאלות הבסיס בסיום עמוד (כשנשלחו) */
+export function saveGlobalInstructions(instructions, finishQuestions) {
+  return requestJson('/api/admin/books/global-instructions', { method: 'POST', body: { instructions, finishQuestions }, fallback: 'לא הצלחנו לשמור את ההנחיות הכלליות.' })
 }
 
 export function deleteSubscriber(email) {

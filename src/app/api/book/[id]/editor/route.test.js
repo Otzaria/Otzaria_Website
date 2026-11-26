@@ -43,6 +43,12 @@ it('מחזיר את מצב העמוד, התוכן ופרטי הספר הפרטי
   expect(mocks.page).toHaveBeenCalledExactlyOnceWith({ book: 'b', pageNumber: 3 })
 })
 
+it('מחזיר את שאלות סיום העמוד של הספר מנורמלות (ובלי הגדרה: בסיס בלבד)', async () => {
+  expect((await (await read()).json()).book.finishQuestions).toEqual({ mode: 'base', items: [] })
+  mocks.book.mockReturnValue({ lean: async () => ({ ...book, finishQuestions: { mode: 'custom', items: [' בדקתי ', ''] } }) })
+  expect((await (await read()).json()).book.finishQuestions).toEqual({ mode: 'custom', items: ['בדקתי'] })
+})
+
 it('דוחה ללא session ומספר עמוד מחוץ לטווח לפני קריאה למסד', async () => {
   expect((await read(0)).status).toBe(400)
   mocks.session.mockResolvedValue(null)

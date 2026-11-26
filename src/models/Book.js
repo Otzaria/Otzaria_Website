@@ -9,6 +9,8 @@ const BookSchema = new mongoose.Schema({
   author: { type: String },
   description: { type: String },
   editingInfo: { type: Object },
+  // שאלות בסיום עמוד: { mode: 'base'|'base+custom'|'custom', items: string[] } — lib/finishQuestions.js
+  finishQuestions: { type: Object, default: null },
   examplePage: { type: Number, default: null },
   folderPath: { type: String },
   isHidden: { type: Boolean, default: false },

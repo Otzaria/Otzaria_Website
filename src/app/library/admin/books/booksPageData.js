@@ -19,6 +19,7 @@ import Page from '@/models/Page'
 import SystemConfig from '@/models/SystemConfig'
 import User from '@/models/User'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
+import { GLOBAL_FINISH_QUESTIONS_KEY, normalizeGlobalFinishQuestions } from '@/lib/finishQuestions'
 
 async function loadAdminBooksUncached() {
   await dbConnect()
@@ -104,6 +105,13 @@ export async function loadGlobalInstructions() {
   const config = await SystemConfig.findOne({ key: 'global_editor_instructions' }).lean()
   const value = config?.value
   return JSON.parse(JSON.stringify(value && Array.isArray(value.sections) ? value : { sections: [] }))
+}
+
+/** שאלות הבסיס בסיום עמוד — כמו GET /api/admin/books/global-instructions (finishQuestions) */
+export async function loadGlobalFinishQuestions() {
+  await dbConnect()
+  const config = await SystemConfig.findOne({ key: GLOBAL_FINISH_QUESTIONS_KEY }).lean()
+  return normalizeGlobalFinishQuestions(config?.value)
 }
 
 /**

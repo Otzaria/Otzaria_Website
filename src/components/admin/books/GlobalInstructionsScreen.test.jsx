@@ -41,4 +41,35 @@ describe('GlobalInstructionsScreen', () => {
     sidebar.remove()
     document.removeEventListener('click', onClick)
   })
+
+  test('שאלות הבסיס בסיום עמוד: מוצגות, ונשמרות יחד עם ההנחיות (שורה = שאלה, בלי שורות ריקות)', async () => {
+    const user = userEvent.setup()
+    const sent = []
+    global.fetch = vi.fn(async (url, options = {}) => {
+      sent.push({ url, body: options.body ? JSON.parse(options.body) : null })
+      return { ok: true, status: 200, type: 'basic', redirected: false, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ success: true }) }
+    })
+    render(
+      <ToastProvider>
+        <GlobalInstructionsScreen
+          initialInstructions={{ sections: [{ title: 'כללי', items: ['שורה'] }] }}
+          initialFinishQuestions={{ items: ['בדקתי ראשי תיבות'] }}
+        />
+      </ToastProvider>
+    )
+    const area = screen.getByLabelText(/^שאלות הבסיס/)
+    expect(area).toHaveValue('בדקתי ראשי תיבות')
+    expect(screen.getByRole('button', { name: 'שמור' })).toBeDisabled()
+    await user.type(area, '{Enter}{Enter}עברתי על הכותרות')
+    await user.click(screen.getByRole('button', { name: 'שמור' }))
+    await screen.findByText('ההנחיות הכלליות נשמרו')
+    expect(sent).toEqual([{
+      url: '/api/admin/books/global-instructions',
+      body: {
+        instructions: { sections: [{ title: 'כללי', items: ['שורה'] }] },
+        finishQuestions: { items: ['בדקתי ראשי תיבות', 'עברתי על הכותרות'] },
+      },
+    }])
+    expect(screen.getByRole('button', { name: 'שמור' })).toBeDisabled()
+  })
 })

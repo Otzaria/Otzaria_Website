@@ -107,3 +107,32 @@ describe('isFreshSubmitChord', () => {
     expect(isFreshSubmitChord(ev({ timeStamp: 40 }), 50)).toBe(false)
   })
 })
+
+describe('FinishPageDialog — שאלות בסיום עמוד', () => {
+  const questions = [
+    { id: 'global-0', text: 'בדקתי ראשי תיבות', source: 'global' },
+    { id: 'book-0', text: 'סימנתי דיבור המתחיל', source: 'book' }
+  ]
+
+  it('בלי שאלות — אין אזור שאלות', () => {
+    setup()
+    expect(screen.queryByRole('region', { name: 'לפני שמסיימים' })).toBeNull()
+  })
+
+  it('מציג תיבת סימון לכל שאלה וסופר את הסימונים', () => {
+    setup({ questions })
+    const region = screen.getByRole('region', { name: 'לפני שמסיימים' })
+    const boxes = within(region).getAllByRole('checkbox')
+    expect(boxes).toHaveLength(2)
+    expect(region).toHaveTextContent('0 מתוך 2')
+    fireEvent.click(within(region).getByLabelText('סימנתי דיבור המתחיל'))
+    expect(boxes[1]).toBeChecked()
+    expect(region).toHaveTextContent('1 מתוך 2')
+  })
+
+  it('השאלות לא חוסמות את הסיום', () => {
+    const h = setup({ questions })
+    fireEvent.click(screen.getByRole('button', { name: 'סיים ועבור לעמוד הבא' }))
+    expect(h.onSubmit).toHaveBeenCalledTimes(1)
+  })
+})

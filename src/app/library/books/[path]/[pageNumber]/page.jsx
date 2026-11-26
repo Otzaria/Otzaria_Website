@@ -55,6 +55,7 @@ import OcrWordReviewPanel from '@/components/editor/v2/OcrWordReviewPanel'
 import OcrWordPopup from '@/components/editor/v2/OcrWordPopup'
 import { setWordReviewAccepted } from '@/lib/editor/ocrWordReview'
 import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
+import { resolveFinishQuestions } from '@/lib/finishQuestions'
 import PageReportsLayer from '@/components/editor/reports/PageReportsLayer'
 import { usePageReports } from '@/components/editor/reports/usePageReports'
 import { canReportBookError } from '@/components/editor/reports/reportLogic'
@@ -132,6 +133,12 @@ function BookPageEditor({ session, status, bookPath, pageNumber }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [globalInstructions, setGlobalInstructions] = useState(null);
+  // שאלות בסיום עמוד: שאלות הבסיס (מערכת) + הגדרת הספר — lib/finishQuestions.js
+  const [globalFinishQuestions, setGlobalFinishQuestions] = useState(null);
+  const finishQuestions = useMemo(
+    () => resolveFinishQuestions(globalFinishQuestions, bookData?.finishQuestions),
+    [globalFinishQuestions, bookData]
+  );
 
   const [content, setContent] = useState('')
   const [leftColumn, setLeftColumn] = useState('')
@@ -1135,6 +1142,9 @@ ${claimRulesText()}`,
         if (data.success && data.instructions) {
           setGlobalInstructions(data.instructions);
         }
+        if (data.success && data.finishQuestions) {
+          setGlobalFinishQuestions(data.finishQuestions);
+        }
       } catch (err) {
         console.error('Failed to fetch global instructions:', err);
       }
@@ -1883,6 +1893,7 @@ ${claimRulesText()}`,
           saveStatus={uiSaveStatus}
           lastSavedAt={lastSavedAt}
           showNote={false}
+          questions={finishQuestions}
           submitLabel="סיים והעלה"
           // החלון נסגר לפני ההעלאה: אישור דריסה, הודעות והטעינה מגיעים מהחלונות הגלובליים
           onSubmit={() => { setShowFinishDialog(false); handleUploadConfirm() }}

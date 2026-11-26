@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { unauthorized, forbidden, notFound, serverError } from '@/lib/apiResponse';
+import { normalizeBookFinishQuestions } from '@/lib/finishQuestions';
 import { releaseExpiredPageClaims, countActiveClaims } from '@/lib/bookPageClaims';
 import { isPersonalBook, MAX_ACTIVE_PAGE_CLAIMS, PAGE_RELEASE_AFTER_DAYS } from '@/lib/pageClaimPolicy';
 
@@ -86,6 +87,7 @@ export async function GET(request, { params }) {
         category: book.category,
         description: book.description,
         editingInfo: book.editingInfo || null,
+        finishQuestions: normalizeBookFinishQuestions(book.finishQuestions),
         examplePage: book.examplePage || null,
         isPrivate: book.isPrivate || false,
         isOwner: isOwner
