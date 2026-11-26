@@ -216,25 +216,20 @@ function CorrectionReport({ id }) {
             onExpand={fileDiff ? expandContext : null}
             expanding={expanding}
             split={(
-              <div className="space-y-4">
+              // רק תצוגה מסומנת — התיבות הפשוטות היו כפילות של אותו טקסט. בלי הצעה אין מה לסמן, ולכן מוצגות שתי השורות כמו שהן.
+              targetLine === null ? (
                 <section className="grid gap-4 md:grid-cols-2">
-                  <LineBox
-                    title="המקור העדכני במאגר"
-                    tone="source"
-                    subtitle={sourceSubtitle}
-                    text={currentLine}
-                    empty="לא אותרה שורה מתאימה במקור"
-                  />
-                  <LineBox title="התוצאה המיועדת" tone="target" subtitle={`גרסת הצעה ${rev.revision}`} text={targetLine} empty="לא הוצע נוסח (ללא הצעה)" />
+                  <LineBox title="המקור העדכני במאגר" tone="source" text={currentLine} empty="לא אותרה שורה מתאימה במקור" />
+                  <LineBox title="התוצאה המיועדת" tone="target" subtitle={`גרסת הצעה ${rev.revision}`} text={null} empty="לא הוצע נוסח (ללא הצעה)" />
                 </section>
-                {currentLine !== null && targetLine !== null && <TextDiff before={currentLine} after={targetLine} />}
-                {currentLine === null && targetLine !== null && (
-                  <div>
-                    <p className="text-xs text-on-surface/60 mb-2">השורה לא אותרה במקור העדכני; זו ההשוואה מול העותק שנשלח מהתוכנה.</p>
-                    <TextDiff before={rev.originalLine} after={targetLine} />
-                  </div>
-                )}
-              </div>
+              ) : currentLine !== null ? (
+                <TextDiff before={currentLine} after={targetLine} afterLabel={`אחרי (מיועד) · גרסת הצעה ${rev.revision}`} />
+              ) : (
+                <div>
+                  <p className="text-xs text-on-surface/60 mb-2">השורה לא אותרה במקור העדכני; זו ההשוואה מול העותק שנשלח מהתוכנה.</p>
+                  <TextDiff before={rev.originalLine} after={targetLine} beforeLabel="לפני (העותק מהתוכנה)" afterLabel={`אחרי (מיועד) · גרסת הצעה ${rev.revision}`} />
+                </div>
+              )
             )}
           />
           {(reportedPick || githubUrl) && (

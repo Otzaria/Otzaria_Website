@@ -13,9 +13,9 @@ function Chars({ parts, side }) {
 }
 
 /**
- * @param {{before:string, after:string}} props
+ * @param {{before:string, after:string, beforeLabel?:string, afterLabel?:string}} props
  */
-export default function TextDiff({ before, after }) {
+export default function TextDiff({ before, after, beforeLabel = 'לפני (במקור)', afterLabel = 'אחרי (מיועד)' }) {
   const segs = useMemo(() => buildDiffView(before ?? '', after ?? ''), [before, after])
   const renderSide = (side) =>
     segs.map((s, i) => {
@@ -32,11 +32,11 @@ export default function TextDiff({ before, after }) {
   return (
     <div className="grid gap-3 md:grid-cols-2" dir="rtl">
       <div>
-        <div className="text-xs font-bold text-danger-700 mb-1">לפני (במקור)</div>
+        <div className="text-xs font-bold text-danger-700 mb-1">{beforeLabel}</div>
         <div className="rounded-lg border border-danger-200 bg-white p-3 whitespace-pre-wrap break-words leading-8 text-lg">{renderSide('before')}</div>
       </div>
       <div>
-        <div className="text-xs font-bold text-success-700 mb-1">אחרי (מיועד)</div>
+        <div className="text-xs font-bold text-success-700 mb-1">{afterLabel}</div>
         <div className="rounded-lg border border-success-200 bg-white p-3 whitespace-pre-wrap break-words leading-8 text-lg">{renderSide('after')}</div>
       </div>
     </div>
