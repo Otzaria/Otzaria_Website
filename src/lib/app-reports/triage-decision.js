@@ -80,6 +80,8 @@ export async function getTriageMaterial(reportId) {
       errors: Boolean(doc.fileIds?.errors?.gridfsId),
       diagnostics: Boolean(doc.fileIds?.diagnostics?.gridfsId),
       images: (doc.fileIds?.images || []).length,
+      // רק אם קיים: ה-dump עצמו לא מוגש לשירות
+      minidump: Boolean(doc.fileIds?.minidump?.gridfsId),
     },
   };
 }
