@@ -37,7 +37,6 @@ export default function PersonalLibraryPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState העיקרי קורה אחרי await (setLoading(true) הסינכרוני הוא no-op בעליה)
     fetchUserBooks()
   }, [])
 
