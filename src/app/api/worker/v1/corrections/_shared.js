@@ -60,10 +60,13 @@ export async function readAgentBody(request, maxBytes, { allowEmpty = false } = 
   }
 }
 
-// handler(request, { agentId, config, params }). חריגה → 500 internal_error בלי טקסט החריגה; הלוג
-// מינימלי בכוונה (name/code ונתיב בלבד — message/stack עלולים להכיל תוכן בקשה או סודות).
+// handler(request, { agentId, config, params, startedAt }). startedAt — Date.now() בכניסה לראוט, לפני כל פעולה: תקציב
+// התפיסה נספר ממנו, כך ששער השבת, האימות, המסד, "נראה לאחרונה" וטעינת ההגדרות הם חלק ממנו (הלקוח מתנתק לפי זמן
+// הבקשה כולה). חריגה → 500 internal_error בלי טקסט החריגה; הלוג מינימלי בכוונה (name/code ונתיב בלבד — message/stack
+// עלולים להכיל תוכן בקשה או סודות).
 export function withAgent(handler) {
   return async (request, routeCtx) => {
+    const startedAt = Date.now();
     let route = '?';
     try {
       route = new URL(request.url).pathname;
@@ -88,7 +91,7 @@ export function withAgent(handler) {
       }
       const config = await loadCorrectionsConfig();
       const params = routeCtx?.params ? await routeCtx.params : {};
-      return await handler(request, { agentId: auth.agentId, config, params });
+      return await handler(request, { agentId: auth.agentId, config, params, startedAt });
     } catch (err) {
       console.error(`[corrections-agent] internal error route=${route} name=${String(err?.name ?? 'unknown')} code=${String(err?.code ?? '-')}`);
       return agentError(500, 'internal_error');

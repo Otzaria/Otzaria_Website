@@ -14,6 +14,7 @@ import { resolveSource, USABLE_STATUSES, isAllowedRepoPath } from './resolver.js
 import { createGitSource, getSharedSourceCache } from './git-source.js';
 import { splitSourceLines } from './source-text.js';
 import { computeNewLine } from './payload.js';
+import { isExactlyApplied } from './already-applied.js';
 import { computeChangeDigest } from './ocj1.js';
 import { extractLineContext, committedNewLine, clampContextLines } from './unified-diff.js';
 import { deriveLabels } from './labels.js';
@@ -275,7 +276,10 @@ async function buildChangeFromSource({ r, rev, config, deps, seenBlobSha }) {
   } catch (e) {
     return { error: err(503, 'source_unavailable', { detail: e.status ? `github_${e.status}` : 'network' }) };
   }
-  if (source.status === 'already_applied') return { alreadyApplied: true, source };
+  // "כבר תוקן" נסגר רק לפי הכלל המחמיר של already-applied.js (המקורית נעלמה מהקובץ, המוצעת פעם אחת, ≥15 תווים
+  // נראים, לא כותרת). אחרת — אינה נחשבת תיקון שהוחל, והאישור ממשיך במסלול הרגיל של שורה שאינה ניתנת לאישור
+  // (409 source_not_resolved עם המקור): המתנדב בוחר מקור או עורך, ולעולם לא נסגר בשקט.
+  if (source.status === 'already_applied' && isExactlyApplied(source, rev)) return { alreadyApplied: true, source };
   if (!USABLE_STATUSES.has(source.status)) return { error: err(409, 'source_not_resolved', { source }) };
   if (seenBlobSha && seenBlobSha !== source.blobSha) return { error: err(409, 'stale_view', { reason: 'source_changed', source }) };
   const originalLine = source.currentLine;
@@ -298,10 +302,11 @@ async function approveRevision({ user, r, rev, pushRevision, config, deps, gener
     const set = { state: 'closed_already_fixed', status: 'resolved', 'publish.status': 'skipped_already_fixed', closedAt: now, resolvedAt: now, closeReason: 'volunteer_verified_already_fixed', 'manual.status': 'none', resolvedSource: { ...built.source, generation } };
     const update = { $set: set, $inc: { workflowGeneration: 1 }, $push: { decisions: { ...decision, decision: 'already_fixed', reasonCode: 'ok' } } };
     if (pushRevision) { update.$push.proposals = pushRevision; update.$set.currentRevision = pushRevision.revision; }
-    const updated = await ErrorReport.findOneAndUpdate(filterBase, update, { returnDocument: 'after' }).lean();
-    if (!updated) return err(409, 'stale_view');
-    await logEvent(r._id, 'closed_already_fixed', userActor(user), updated.workflowGeneration);
-    return ok({ generation: updated.workflowGeneration, result: 'already_fixed' });
+    // 200 (ואיתו מייל התודה ב-actions.js) רק כשהכתיבה המותנית אכן שינתה את הדיווח.
+    const res = await ErrorReport.updateOne(filterBase, update);
+    if (res.modifiedCount !== 1) return err(409, 'stale_view');
+    await logEvent(r._id, 'closed_already_fixed', userActor(user), generation + 1);
+    return ok({ generation: generation + 1, result: 'already_fixed' });
   }
 
   const c = built.change;

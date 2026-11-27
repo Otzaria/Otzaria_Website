@@ -523,6 +523,90 @@ test('משיכה: דיווח אחד שמפיל את ההכנה אינו מפיל
   assert.deepEqual([badJob.status, badJob.outcome], ['failed', 'prepare_failed']);
 });
 
+// ---------------------------------------------------------------- המשך #313: כשלי הכנה רגעיים ותקציב התפיסה
+
+test('משיכה: תקלת מסד רגעית בהכנה — ניסיון נספר ו-backoff, לא ידני; מיצוי ניסיונות → ידני (prepare_failed)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  t.mock.method(console, 'error', () => {});
+  const c = pull();
+  const r = await ingest('p-prep-transient', c);
+  const orig = ErrorReport.updateOne.bind(ErrorReport);
+  let failing = true;
+  t.mock.method(ErrorReport, 'updateOne', (filter, update, ...rest) => {
+    if (failing && update?.$set?.resolvedSource) {
+      const err = new Error('connection lost');
+      err.name = 'MongoNetworkError';
+      throw err;
+    }
+    return orig(filter, update, ...rest);
+  });
+  const first = await claim(c, T0);
+  assert.deepEqual(idle(first), { job: null, retryAfter: 60 });
+  const j1 = await CorrectionJob.findOne({ report: r._id }).lean();
+  assert.deepEqual([j1.status, j1.attempts, j1.leaseExpiries ?? 0, j1.lastErrorClass], ['pending', 1, 0, 'transient']);
+  assert.ok(j1.nextAttemptAt > T0, 'backoff');
+  assert.equal((await load(r._id)).manual.status, 'none', 'תקלה רגעית אינה שולחת לידני');
+  // אחרי ה-backoff וכשהתקלה חלפה — התפיסה מצליחה.
+  failing = false;
+  const ok = await claim(c, new Date(j1.nextAttemptAt.getTime() + 1000));
+  assert.equal(ok.job.request.report_id, String(r._id));
+  // מיצוי: הניסיון האחרון שנכשל → ידני.
+  await CorrectionJob.updateOne({ _id: ok.job.jobId }, { $set: { status: 'pending', attempts: c.verify.maxAttempts - 1, nextAttemptAt: T0, leaseOwner: null, leaseTokenHash: null, leaseExpiresAt: null } });
+  await ErrorReport.updateOne({ _id: r._id }, { $unset: { resolvedSource: 1 } });
+  failing = true;
+  await claim(c, at(10_000));
+  const done = await CorrectionJob.findById(ok.job.jobId).lean();
+  assert.deepEqual([done.status, done.outcome], ['failed', 'prepare_failed']);
+  assert.equal((await load(r._id)).manual.handoffReason, 'prepare_failed');
+});
+
+test('משיכה: תקציב התפיסה נגמר באמצע הכנה — המשימה חוזרת לתור בלי lease, בלי ניסיון ובלי פקיעה; הדיווח לא נוגע', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  t.mock.method(console, 'error', () => {});
+  const c = pull();
+  const r = await ingest('p-budget-mid', c);
+  // השעון עומד עד שההכנה מגיעה ל-GitHub, והקריאה הראשונה שם אורכת 25 שניות (יותר מהתקציב): מכאן ההכנה נעצרת.
+  // (התקציב נבדק אחרי כל שלב, ולכן שעון שמתקדם כבר לפני ההכנה עוצר את התפיסה עוד לפני ה-outbox — ראו ביקורת רביעית.)
+  let clockNow = 0;
+  let calls = 0;
+  const slowGitHub = (url, init) => {
+    calls += 1;
+    clockNow = 25_000;
+    return gh.fetch(url, init);
+  };
+  const res = await claimVerifyJob({ config: c, agentId: AGENT, deps: { ...deps(), githubFetch: slowGitHub, clock: () => clockNow }, now: T0 });
+  assert.ok(calls >= 1, 'ההכנה הגיעה ל-GitHub');
+  assert.deepEqual(idle(res), { job: null, retryAfter: 5 });
+  const j = await CorrectionJob.findOne({ report: r._id }).lean();
+  assert.deepEqual([j.status, j.attempts, j.leaseExpiries ?? 0, j.leaseTokenHash ?? null], ['pending', 0, 0, null]);
+  assert.equal((await load(r._id)).manual.status, 'none');
+  assert.equal((await load(r._id)).verification.status, 'queued');
+  // תפיסה רגילה אחריה מצליחה, והפקיעות עדיין אפס.
+  const next = await claim(c, at(1));
+  assert.equal(next.job.request.report_id, String(r._id));
+  assert.equal((await CorrectionJob.findById(next.job.jobId).lean()).leaseExpiries ?? 0, 0);
+});
+
+test('משיכה: יתרת התקציב מועברת ל-GitHub כ-timeout — קריאה שחורגת ממנה נעצרת ונחשבת חריגת תקציב', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  t.mock.method(console, 'error', () => {});
+  const c = pull();
+  const r = await ingest('p-budget-abort', c);
+  let t0 = 0;
+  let seen = null;
+  const hangingFetch = (url, init = {}) => new Promise((_, reject) => {
+    seen = init.signal;
+    init.signal?.addEventListener('abort', () => reject(init.signal.reason));
+  });
+  // 15 שניות כבר עברו: נשארו 5 שניות — קטן מה-timeout הרגיל של GitHub, ולכן התקציב הוא שעוצר.
+  const pending = claimVerifyJob({ config: { ...c, agent: { ...c.agent, claimBudgetMs: 50 } }, agentId: AGENT, deps: { ...deps(), githubFetch: hangingFetch, clock: () => t0 }, now: T0 });
+  const res = await pending;
+  assert.ok(seen, 'האות הועבר ל-fetch');
+  assert.deepEqual(idle(res), { job: null, retryAfter: 5 });
+  const j = await CorrectionJob.findOne({ report: r._id }).lean();
+  assert.deepEqual([j.status, j.attempts, j.leaseExpiries ?? 0], ['pending', 0, 0]);
+});
+
 // ---------------------------------------------------------------- ביקורת PR #313: משאבים, שחרור והשהיה
 
 test('משיכה: "אין משאבים" חוזר שוב ושוב אינו שולח לידני — רק מועד המיצוי מגביל', async (t) => {
@@ -626,7 +710,8 @@ test('משיכה: התפיסה מסמנת batchDue כשלא רצה אצווה ז
   const { job } = await claim(c, at(30));
   assert.equal((await submit(c, job, decide(job, { scope: 'technical_and_content' }), at(31))).outcome, 'publish');
   assert.equal((await load(r._id)).dispatch.publish, true);
-  assert.equal((await claim(c, at(40))).batchDue, true, 'פרסום ממתין');
+  assert.equal((await claim(c, at(40))).batchDue, false, 'פרסום ממתין, אבל האצווה האחרונה רצה לפני פחות מ-45 שניות');
+  assert.equal((await claim(c, at(50))).batchDue, true, 'פרסום ממתין ועברו 45 שניות');
 });
 
 // ---------------------------------------------------------------- ביקורת PR #313: תקציב זמן לתפיסה
@@ -637,13 +722,34 @@ test('משיכה: תקציב הזמן של התפיסה — חוזרת עם Retr
   const lost = { file_path: 'אוצריא/אין/כזה.txt', source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: 'אוצריא/אין/כזה.txt' } };
   for (const id of ['p-slow-1', 'p-slow-2', 'p-slow-3']) await ingest(id, c, lost);
   const good = await ingest('p-slow-good', c);
-  let tick = 0;
-  const slow = await claimVerifyJob({ config: c, agentId: AGENT, deps: { ...deps(), clock: () => (tick += 15_000) }, now: T0 });
+  // הזמן מתקדם רק בקריאות GitHub (איטיות), כך שמספר קריאות השעון אינו משפיע.
+  let elapsed = 0;
+  let fetches = 0;
+  const slowFetch = async (...a) => { fetches += 1; return gh.fetch(...a); };
+  // הביקורת החמישית: גם העברה לידני היא תופעת לוואי — כל העברה כזו בתפיסה נכתבת כשעוד נשאר תקציב. (כמה דיווחים מגיעים
+  // לשם לפני שהתקציב נגמר תלוי במספר קריאות GitHub, כלומר במטמון המקורות המשותף — לכן נבדק הרגע, לא המספר.)
+  const handoffs = [];
+  const watched = ['updateOne', 'findOneAndUpdate'].map((m) => [m, ErrorReport[m]]);
+  for (const [m, orig] of watched) {
+    ErrorReport[m] = function watch(f, u, ...rest) {
+      if (u?.$set?.['manual.status'] === 'queued') handoffs.push(fetches * 15_000);
+      return orig.call(this, f, u, ...rest);
+    };
+  }
+  let slow;
+  try {
+    slow = await claimVerifyJob({ config: c, agentId: AGENT, deps: { ...deps(), githubFetch: slowFetch, clock: () => { elapsed = fetches * 15_000; return elapsed; } }, now: T0 });
+  } finally {
+    for (const [m, orig] of watched) ErrorReport[m] = orig;
+  }
   assert.deepEqual(idle(slow), { job: null, retryAfter: 5 });
   assert.equal(await CorrectionJob.countDocuments({ status: 'leased' }), 0, 'אין משימה תפוסה שלא נמסרה');
-  assert.equal(await CorrectionJob.countDocuments({ status: 'pending' }), 2);
+  assert.ok(handoffs.every((ms) => ms < c.agent.claimBudgetMs), `העברה לידני אחרי שהתקציב נגמר: ${handoffs}`);
+  assert.equal(await CorrectionJob.countDocuments({ status: 'pending' }), 4 - handoffs.length);
+  assert.ok(handoffs.length < 3, 'התקציב נגמר לפני שכל האבודים נבדקו');
   const next = await claim(c, at(10));
   assert.equal(next.job.request.report_id, String(good._id));
+  assert.equal(await ErrorReport.countDocuments({ 'manual.status': 'queued' }), 3);
 });
 
 test('משיכה: הסריקה דילגה על כל המשימות שבדקה → Retry-After קצר (ייתכן שיש עוד עבודה)', async (t) => {
@@ -699,6 +805,30 @@ test('משיכה: "כבר הוחל" שנסגר בתפיסה — מייל למד�
   assert.deepEqual([scheduled.length, mails.length], [1, 0], 'עדיין לא נשלח');
   await scheduled[0]();
   assert.deepEqual(mails.map((m) => m.kind), ['already_fixed']);
+});
+
+test('משיכה: already_fixed של השירות שהאתר אימת — מייל "כבר תוקן" למדווח פעם אחת, אחרי התשובה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const c = pull();
+  const mails = [];
+  const scheduled = [];
+  const mailDeps = { ...deps(), schedule: (work) => scheduled.push(work), sendThanksMail: async (m) => { mails.push(m); return { sent: true }; } };
+  const send = (job, body, now) => {
+    const text = JSON.stringify(body);
+    return submitVerifyResult({ config: c, jobId: job.jobId, token: job.leaseToken, raw: Buffer.from(text), body: JSON.parse(text), deps: mailDeps, now });
+  };
+  const r = await ingest('p-svc-fixed-mail', c, { sender_email: 'reporter@example.org' });
+  const { job } = await claim(c, T0);
+  gh.pushExternal('main', { [PATH]: FILE.replace(LINE, NEW) });
+  const body = decide(job, { decision: 'already_fixed' });
+  const res = await send(job, body, at(5));
+  assert.equal(res.outcome, 'close_already_fixed');
+  assert.equal((await load(r._id)).state, 'closed_already_fixed');
+  assert.deepEqual([scheduled.length, mails.length], [1, 0], 'עדיין לא נשלח — מתוזמן אחרי התשובה');
+  await scheduled[0]();
+  assert.deepEqual(mails.map((m) => m.kind), ['already_fixed']);
+  await send(job, body, at(6));
+  assert.equal(scheduled.length, 1, 'שליחה חוזרת אינה מתזמנת שוב');
 });
 
 // ---------------------------------------------------------------- ביקורת PR #313: מרוצים ומצבי קצה
@@ -821,9 +951,9 @@ const H_REPORT = {
   },
 };
 
-async function movedHeadingClaim(c, id) {
+async function movedHeadingClaim(c, id, over = {}) {
   gh = new FakeGitHub({ files: { [PATH]: H_FILE } });
-  const r = await ingest(id, c, H_REPORT);
+  const r = await ingest(id, c, { ...H_REPORT, ...over });
   const { job } = await claim(c, T0);
   assert.equal(job?.request.report_id, String(r._id));
   gh.pushExternal('main', { [PATH]: H_MOVED });
@@ -853,6 +983,62 @@ test('ביקורת חוזרת #313: תוצאה שמגיעה בזמן השהיה 
   assert.deepEqual([s.state, s.manual.handoffReason, s.verification.status], ['open', 'service_paused', 'skipped_service_disabled']);
   assert.deepEqual(await submit(paused, job, body, at(6)), { ok: true, outcome: 'cancelled', cancelled: true, duplicate: true });
   assert.deepEqual(await beat(c, job, at(7)), { ok: true, cancelled: true, leaseExpiresAt: null });
+});
+
+// ---------------------------------------------------------------- ביקורת חוזרת #314: כשל של משימה ישנה, מייל רק אחרי סגירה מחמירה
+
+test('ביקורת חוזרת #314: כשל הכנה רגעי אחרון של משימה ישנה אינו מעביר לידני את הגרסה החדשה של הדיווח', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  t.mock.method(console, 'error', () => {});
+  const c = pull();
+  const r = await ingest('p-old-crash', c);
+  await dispatchOutbox({ config: c, now: T0 });
+  // הניסיון הבא הוא האחרון: כשל רגעי בו ממצה את המשימה (recordCrash → failed)
+  await CorrectionJob.updateOne({ report: r._id }, { $set: { attempts: c.verify.maxAttempts - 1 } });
+  const orig = ErrorReport.updateOne.bind(ErrorReport);
+  let fired = false;
+  t.mock.method(ErrorReport, 'updateOne', (filter, update, ...rest) => {
+    if (!fired && update?.$set?.resolvedSource) {
+      fired = true;
+      // בזמן ההכנה הדיווח נשלח מחדש (גרסה חדשה ובקשה חדשה ב-outbox), ואז המסד נופל רגעית
+      const resend = { $inc: { workflowGeneration: 1 }, $set: { 'verification.requestId': 'req_newer', 'verification.status': 'queued', 'dispatch.verify': true } };
+      return orig({ _id: r._id }, resend).then(() => {
+        const err = new Error('connection lost');
+        err.name = 'MongoNetworkError';
+        throw err;
+      });
+    }
+    return orig(filter, update, ...rest);
+  });
+  assert.equal((await claim(c, T0)).job, null);
+  const old = await CorrectionJob.findOne({ report: r._id, generation: r.workflowGeneration }).lean();
+  assert.deepEqual([old.status, old.outcome], ['failed', 'prepare_failed']);
+  const s = await load(r._id);
+  assert.deepEqual([s.workflowGeneration, s.manual.status, s.verification.status], [r.workflowGeneration + 1, 'none', 'queued']);
+  // הגרסה החדשה נמסרת לשירות כרגיל
+  const { job } = await claim(c, at(1));
+  assert.equal(job?.request.workflow_generation, r.workflowGeneration + 1);
+});
+
+test('ביקורת חוזרת #314: מייל "כבר תוקן" רק אחרי סגירה מחמירה — כותרת שזזה, בבדיקה פעילה ובהשהיה, אינה שולחת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const c = pull();
+  const paused = pull({}, { verifyPaused: true });
+  const scheduled = [];
+  // נבנה בכל שליחה: movedHeadingClaim מחליף את ה-GitHub המדומה.
+  const mailDeps = () => ({ ...deps(), schedule: (work) => scheduled.push(work), sendThanksMail: async () => ({ sent: true }) });
+  const send = (config, job, now) => {
+    const text = JSON.stringify(decide(job, { decision: 'already_fixed' }));
+    return submitVerifyResult({ config, jobId: job.jobId, token: job.leaseToken, raw: Buffer.from(text), body: JSON.parse(text), deps: mailDeps(), now });
+  };
+  const running = await movedHeadingClaim(c, 'p-moved-heading-mail', { sender_email: 'reporter@example.org' });
+  assert.equal((await send(c, running.job, at(5))).outcome, 'manual');
+  assert.equal((await load(running.r._id)).state, 'open');
+  await db.reset();
+  const held = await movedHeadingClaim(c, 'p-moved-heading-mail-paused', { sender_email: 'reporter@example.org' });
+  assert.equal((await send(paused, held.job, at(5))).outcome, 'cancelled');
+  assert.equal((await load(held.r._id)).state, 'open');
+  assert.equal(scheduled.length, 0);
 });
 
 // ---------------------------------------------------------------- ביקורת שלישית #313
@@ -901,9 +1087,12 @@ function gatedGitHub() {
   const reached = new Promise((res) => { reach = res; });
   return { reached, release, fetch: async (url, init) => { reach(); await gate; return gh.fetch(url, init); } };
 }
+// מיילי התודה שתוזמנו בתוצאות שנמסרו דרך submitVia (deps.schedule) — לא אמור להיות אף אחד במרוץ.
+const raceMails = [];
 function submitVia(githubFetch, config, job, body, now) {
   const text = JSON.stringify(body);
-  return submitVerifyResult({ config, jobId: job.jobId, token: job.leaseToken, raw: Buffer.from(text), body: JSON.parse(text), deps: { githubFetch, random: () => 0 }, now });
+  const mailDeps = { schedule: (work) => raceMails.push(work), sendThanksMail: async () => ({ sent: true }) };
+  return submitVerifyResult({ config, jobId: job.jobId, token: job.leaseToken, raw: Buffer.from(text), body: JSON.parse(text), deps: { githubFetch, random: () => 0, ...mailDeps }, now });
 }
 const sideEffects = (id) => CorrectionEvent.countDocuments({ report: id, type: { $in: ['service_decision', 'closed_already_fixed'] } });
 const historyOnly = (s) => (s.decisions || []).every((d) => d.stale === true);
@@ -949,6 +1138,7 @@ test('ביקורת שלישית #313: החלטה שקריאת GitHub שלה הת
   assert.deepEqual([s2.state, s2.verification.status, s2.manual?.status ?? 'none'], ['open', 'in_progress', 'none']);
   assert.ok(historyOnly(s2));
   assert.equal(await sideEffects(r2._id), 0);
+  assert.equal(raceMails.length, 0, 'אין מייל תודה מהחלטה שלא נכתבה');
   // המחזיק הנוכחי עדיין מחיל את ההחלטה שלו
   const third = await submit(c, second, decide(second, { decision: 'already_fixed' }), new Date(later.getTime() + 1000));
   assert.equal(third.outcome, 'close_already_fixed');
@@ -1001,6 +1191,100 @@ test('ביקורת שלישית #313: מנהל משייך למתנדב והמת�
   assert.equal(await CorrectionEvent.countDocuments({ report: r._id, type: 'verify_requeued' }), 0);
 });
 
+// ---------------------------------------------------------------- ביקורת שלישית #314: תקציב התפיסה
+
+// עיכוב מוזרק בפעולת מסד: השעון של התפיסה (deps.clock) מתקדם ב-ms בכל קריאה שמתאימה ל-match.
+async function withMongoDelay(model, method, match, ms, clock, fn) {
+  const original = model[method];
+  model[method] = function delayed(...args) {
+    if (match(...args)) clock.now += ms;
+    return original.apply(this, args);
+  };
+  try {
+    return await fn();
+  } finally {
+    model[method] = original;
+  }
+}
+
+test('ביקורת שלישית #314: תקציב התפיסה מכסה כל פעולה — כתיבה איטית למסד או תור איטי: המשימה אינה נמסרת, בלי lease, ניסיון או פקיעה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const c = pull();
+  const tight = { ...c, agent: { ...c.agent, claimBudgetMs: 65 } };
+  const r = await ingest('p3-budget', c);
+  const clock = { now: 0 };
+  const tick = () => clock.now;
+  const untouched = async (fence) => {
+    const j = await CorrectionJob.findOne({ report: r._id }).lean();
+    assert.deepEqual([j.status, j.attempts ?? 0, j.leaseExpiries ?? 0, j.leaseTokenHash ?? null, j.leaseExpiresAt ?? null, j.fence], ['pending', 0, 0, null, null, fence]);
+  };
+  // א. כתיבת "בבדיקה" למסד אורכת 73 מ"ש (אחרי הכנה מהירה): מעבר לתקציב של 65 — לא נמסרת
+  const inProgress = (filter, update) => update?.$set?.['verification.status'] === 'in_progress';
+  const slowWrite = await withMongoDelay(ErrorReport, 'updateOne', inProgress, 73, clock, () => claimVerifyJob({ config: tight, agentId: AGENT, deps: { ...deps(), clock: tick }, now: T0 }));
+  assert.equal(slowWrite.job, null);
+  assert.equal(slowWrite.retryAfter, c.agent.busyRetrySeconds);
+  await untouched(1);
+  assert.equal((await load(r._id)).verification.status, 'queued');
+  // ב. פעולות התור שלפני התפיסה (outbox/מטאטא) אורכות 70 מ"ש: לא נתפסת משימה כלל
+  const slowQueue = await withMongoDelay(ErrorReport, 'aggregate', () => true, 70, clock, () => claimVerifyJob({ config: tight, agentId: AGENT, deps: { ...deps(), clock: tick }, now: at(1) }));
+  assert.equal(slowQueue.job, null);
+  await untouched(1);
+  // ג. בלי עיכוב — נמסרת כרגיל באותו תקציב
+  const fine = await claimVerifyJob({ config: tight, agentId: AGENT, deps: { ...deps(), clock: tick }, now: at(2) });
+  assert.equal(fine.job?.request.report_id, String(r._id));
+});
+
+test('ביקורת רביעית #314: תקציב התפיסה נספר מהכניסה לראוט — בקשה שחרגה ממנו עוד לפני התפיסה אינה נוגעת בתור', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const c = pull();
+  // בקנה מידה מוקטן: תקציב של 200 מ"ש (בייצור 20 שניות), והפעולות שלפני התפיסה בראוט אורכות 210 מ"ש.
+  const tight = { ...c, agent: { ...c.agent, claimBudgetMs: 200 } };
+  const r = await ingest('p4-budget-entry', c);
+  await dispatchVerifyOutbox({ config: c, now: T0 });
+  const before = await CorrectionJob.findOne({ report: r._id }).lean();
+  const clock = { now: 210 };
+  const tick = () => clock.now;
+  const late = await claimVerifyJob({ config: tight, agentId: AGENT, startedAt: 0, deps: { ...deps(), clock: tick }, now: T0 });
+  assert.deepEqual(idle(late), { job: null, retryAfter: c.agent.busyRetrySeconds });
+  assert.equal(late.batchDue, false);
+  assert.deepEqual(await CorrectionJob.findOne({ report: r._id }).lean(), before, 'המשימה לא נתפסה ולא השתנתה: בלי lease, ניסיון, פקיעה או fence');
+  assert.equal((await load(r._id)).verification.activeJob.fence, before.fence);
+  // אותן פעולות ב-190 מ"ש — בתוך התקציב: נמסרת כרגיל
+  const fine = await claimVerifyJob({ config: tight, agentId: AGENT, startedAt: 20, deps: { ...deps(), clock: tick }, now: at(1) });
+  assert.equal(fine.job?.request.report_id, String(r._id));
+});
+
+test('ביקורת רביעית #314: התקציב נבדק אחרי כל שלב — כשהוא נגמר ב"נראה לאחרונה" או במטאטא, ה-204 בלי תופעות לוואי: בלי outbox, משימה או אצווה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const c = pull();
+  // בקנה מידה מוקטן: תקציב של 200 מ"ש מהכניסה לראוט (startedAt=0); הבקשה מגיעה לתפיסה אחרי 190 מ"ש.
+  const tight = { ...c, agent: { ...c.agent, claimBudgetMs: 200 } };
+  const r = await ingest('p4-budget-stages', c);
+  const pending = async (what) => {
+    assert.equal((await load(r._id)).dispatch.verify, true, `${what}: ה-outbox לא רץ`);
+    assert.equal(await CorrectionJob.countDocuments({ report: r._id }), 0, `${what}: לא נוצרה משימה`);
+  };
+  await pending('לפני');
+  const clock = { now: 190 };
+  const tick = () => clock.now;
+  const claimAt = (now) => claimVerifyJob({ config: tight, agentId: AGENT, startedAt: 0, deps: { ...deps(), clock: tick }, now });
+  // א. הכתיבה של "נראה לאחרונה" (recordAgentWork) עצמה ממצה את התקציב (20 מ"ש)
+  const isWork = (f, u) => Boolean(u?.$max?.lastWorkAt);
+  const afterWork = await withMongoDelay(CorrectionsAgentState, 'updateOne', isWork, 20, clock, () => claimAt(T0));
+  assert.deepEqual(afterWork, { job: null, retryAfter: c.agent.busyRetrySeconds, batchDue: false });
+  await pending('נגמר ב"נראה לאחרונה"');
+  // ב. המטאטא (רשת הביטחון שבו) ממצה את התקציב: ה-outbox שאחריו אינו רץ
+  clock.now = 190;
+  const afterSweep = await withMongoDelay(ErrorReport, 'aggregate', () => true, 20, clock, () => claimAt(at(1)));
+  assert.deepEqual(afterSweep, { job: null, retryAfter: c.agent.busyRetrySeconds, batchDue: false });
+  await pending('נגמר במטאטא');
+  // ג. בלי עיכוב, באותו תקציב — ה-outbox רץ והמשימה נמסרת
+  clock.now = 190;
+  const fine = await claimAt(at(2));
+  assert.equal(fine.job?.request.report_id, String(r._id));
+  assert.equal((await load(r._id)).dispatch.verify, false);
+});
+
 // הביקורת החמישית: "כבר הוחל" בתפיסה — במקום המדווח עומדת ההצעה, ובשורה שאחריה עותק של הפסקה שבו המילה תוקנה וה-<b>
 // שההצעה הסירה נשאר עם <i> בתוכו. כלל 9 (rawPartHeld, absorption.js) חוסם; הדיווח לידני, בלי סגירה ובלי מייל.
 test('הביקורת החמישית: "כבר הוחל" — עותק שבו ה-<b> שהוסר נשאר עם <i> בתוכו אינו נסגר אוטומטית', async () => {
@@ -1020,6 +1304,66 @@ test('הביקורת החמישית: "כבר הוחל" — עותק שבו ה-<b
   const result = await claimVerifyJob({ config: c, agentId: AGENT, deps: { ...deps(), schedule: (work) => scheduled.push(work) }, now: at(2) });
   const after = await load(r._id);
   assert.deepEqual([result.job, after.state, after.manual.status, scheduled.length], [null, 'open', 'queued', 0]);
+});
+
+// הביקורת החמישית #314: לקיחת המשימה עצמה (findOneAndUpdate על התור) מיצתה את התקציב — ההכנה אינה מתחילה: בלי סימון
+// "בבדיקה", המשימה חוזרת לתור והדיווח נשאר queued.
+test('הביקורת החמישית #314: לקיחת המשימה מיצתה את התקציב — ההכנה אינה מתחילה, בלי סימון "בבדיקה"', async () => {
+  const c = pull();
+  const tight = { ...c, agent: { ...c.agent, claimBudgetMs: 200 } };
+  const r = await ingest('r5-prep-after-budget', c);
+  const first = await claim(c);
+  assert.ok(first.job);
+  await releaseVerifyJob({ config: c, jobId: first.job.jobId, token: first.job.leaseToken, now: at(1) });
+  assert.equal((await load(r._id)).resolvedSource.status, 'exact');
+  let inProgressWrites = 0;
+  const clock = { now: 190 };
+  const orig = ErrorReport.updateOne;
+  ErrorReport.updateOne = function counted(f, u) {
+    if (u?.$set?.['verification.status'] === 'in_progress') inProgressWrites += 1;
+    return orig.apply(this, arguments);
+  };
+  try {
+    const result = await withMongoDelay(CorrectionJob, 'findOneAndUpdate', (f) => f.type === 'verify', 20, clock, () =>
+      claimVerifyJob({ config: tight, agentId: AGENT, startedAt: 0, deps: { ...deps(), clock: () => clock.now }, now: at(2) }));
+    assert.deepEqual(result, { job: null, retryAfter: c.agent.busyRetrySeconds, batchDue: false });
+    assert.equal((await load(r._id)).verification.status, 'queued');
+    assert.equal(inProgressWrites, 0, 'workflow changed after its budget expired');
+  } finally {
+    ErrorReport.updateOne = orig;
+  }
+  // והמשימה נמסרת בתפיסה הבאה (בלי ניסיון ובלי פקיעה שנספרו)
+  const next = await claim(c, at(3));
+  assert.ok(next.job);
+  const job = await CorrectionJob.findById(next.job.jobId).lean();
+  assert.equal(job.leaseExpiries, 0);
+});
+
+// הביקורת החמישית #314: המקור אותר ("כבר הוחל") אבל כתיבתו מיצתה את התקציב — בלי סגירה ובלי מייל; בתפיסה הבאה המקור
+// מאותר מחדש (מקור שמור שאינו שמיש אינו משמש) והדיווח נסגר אז.
+test('הביקורת החמישית #314: כתיבת המקור מיצתה את התקציב — "כבר הוחל" אינו נסגר ואין מייל; בתפיסה הבאה נסגר', async () => {
+  const c = pull();
+  const tight = { ...c, agent: { ...c.agent, claimBudgetMs: 200 } };
+  const original = 'כתב הרב הגדול כי הרב השגיאה היא עיקר הענין ובכל אופן';
+  const proposed = original.replace('השגיאה', 'השגחה');
+  const r = await ingest('r5-close-after-budget', c, {
+    correction: { original_line: original, original_selection: null, selection_offset: null, proposed_text: proposed, context_before: '', context_after: '' },
+  });
+  gh.pushExternal('main', { [PATH]: `<h1>בראשית</h1>\n\n${proposed}\nסוף\n` });
+  const scheduled = [];
+  const clock = { now: 190 };
+  const result = await withMongoDelay(ErrorReport, 'updateOne', (f, u) => Boolean(u?.$set?.resolvedSource), 20, clock, () =>
+    claimVerifyJob({ config: tight, agentId: AGENT, startedAt: 0, deps: { ...deps(), schedule: (work) => scheduled.push(work), clock: () => clock.now }, now: at(2) }));
+  assert.deepEqual(result, { job: null, retryAfter: c.agent.busyRetrySeconds, batchDue: false });
+  const after = await load(r._id);
+  assert.deepEqual([after.state, after.closeReason ?? null, scheduled.length], ['open', null, 0]);
+  assert.equal(after.resolvedSource.status, 'already_applied');
+  // בתפיסה הבאה (בלי עיכוב) — איתור מחדש, ואז הסגירה והמייל
+  const again = await claimVerifyJob({ config: c, agentId: AGENT, deps: { ...deps(), schedule: (work) => scheduled.push(work) }, now: at(3) });
+  assert.equal(again.job, null);
+  const closed = await load(r._id);
+  assert.equal(closed.state, 'closed_already_fixed');
+  assert.equal(scheduled.length, 1);
 });
 
 // מקור שמור שאינו שמיש (נשאר רק כשהטיפול בו נקטע — תקלה אחרי שמירתו) אינו נשלח לשירות כ"מוכן": התפיסה מאתרת מחדש.

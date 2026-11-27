@@ -35,8 +35,37 @@ const RESOLVE_HANDOFF = {
 // התנגשות במקור אחרי האישור → האישור נפסל וחוזר למתנדב. source_not_resolved: הקובץ השתנה והפסקה המדווחת לא אותרה בוודאות.
 const CONFLICT_REASONS = new Set(['source_changed', 'source_not_resolved', 'target_missing', 'structural_change']);
 
+const GITHUB_TIMEOUT_MS = 20_000;
+
+/** תקציב הזמן של תפיסה במשיכה (agent.js) נגמר באמצע ההכנה — הקורא מחזיר את המשימה לתור בלי ניסיון ובלי פקיעה. */
+export function budgetExceededError() {
+  const err = new Error('claim budget exceeded');
+  err.budgetExceeded = true;
+  return err;
+}
+
+// כל קריאה ל-GitHub מוגבלת ליתרת התקציב (כשהיא קטנה מה-timeout הרגיל): הכנה איטית לא חורגת מהתקציב,
+// וה-lease לא נשאר באסימון שלא נמסר. כשהתקציב הוא שעצר — budgetExceeded, לא כשל של הדיווח.
+function withClaimBudget(fetchImpl, budget) {
+  if (!budget) return fetchImpl;
+  return async (url, init = {}) => {
+    const left = budget.remainingMs();
+    if (left <= 0) throw budgetExceededError();
+    if (left >= GITHUB_TIMEOUT_MS) return fetchImpl(url, init);
+    const budgetSignal = AbortSignal.timeout(left);
+    try {
+      return await fetchImpl(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, budgetSignal]) : budgetSignal });
+    } catch (err) {
+      if (budgetSignal.aborted) throw budgetExceededError();
+      throw err;
+    }
+  };
+}
+
 function sourceGit(config, deps) {
-  const client = createRepoClient({ repo: config.source.repo, token: config.source.token || null, fetchImpl: deps.githubFetch || fetch });
+  const client = createRepoClient({
+    repo: config.source.repo, token: config.source.token || null, fetchImpl: withClaimBudget(deps.githubFetch || fetch, deps.claimBudget), timeoutMs: GITHUB_TIMEOUT_MS,
+  });
   return createGitSource({ client, ref: config.source.ref, cache: getSharedSourceCache(config.cacheBytes) });
 }
 
@@ -45,6 +74,21 @@ function publishClient(config, deps) {
 }
 
 const isTransientHttp = (err) => !err.status || err.status === 429 || err.status >= 500 || err.transient === true || err.name === 'TimeoutError';
+
+const TRANSIENT_NET_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT']);
+
+/**
+ * תקלה רגעית (מסד או רשת) שכדאי לנסות שוב — בניגוד לכשל דטרמיניסטי של הדיווח עצמו (TypeError, נתון פגום).
+ * חריגות GitHub עם status מסווגות כמו ב-isTransientHttp; fetch שנכשל ברשת נושא cause עם קוד רשת.
+ */
+export function isTransientPrepareError(err) {
+  if (!err) return false;
+  if (err.transient === true || err.name === 'TimeoutError') return true;
+  if (typeof err.status === 'number') return err.status === 429 || err.status >= 500;
+  if (/^Mongo(Network|ServerSelection|Timeout|PoolCleared|PoolClosed|NotConnected|Topology)/.test(String(err.name))) return true;
+  if (err.hasErrorLabel?.('RetryableWriteError') || err.hasErrorLabel?.('TransientTransactionError')) return true;
+  return TRANSIENT_NET_CODES.has(err.code) || TRANSIENT_NET_CODES.has(err.cause?.code);
+}
 
 // ---------------------------------------------------------------- jobs
 
@@ -56,7 +100,7 @@ export async function finishJob(job, status, outcome, extra = {}) {
   return res.modifiedCount === 1;
 }
 
-async function rescheduleJob(job, set) {
+export async function rescheduleJob(job, set) {
   const res = await CorrectionJob.updateOne(
     { _id: job._id, fence: job.fence, status: 'leased' },
     { $set: { status: 'pending', leaseOwner: null, leaseExpiresAt: null, ...set } },
@@ -496,7 +540,7 @@ const requestFor = ({ report, rev, source }, job, config) => buildVerifyRequest(
  * מותנית-גרסה כמו כל מעבר.
  */
 async function closeAlreadyApplied({ job, report, rev, source, now, deps }) {
-  const updated = await ErrorReport.findOneAndUpdate(
+  const res = await ErrorReport.updateOne(
     { _id: report._id, workflowGeneration: report.workflowGeneration, state: 'open', 'manual.status': { $ne: 'claimed' }, ...heldBy(job, leaseNow(deps, now)) },
     {
       $set: {
@@ -512,11 +556,11 @@ async function closeAlreadyApplied({ job, report, rev, source, now, deps }) {
         },
       },
     },
-    { returnDocument: 'after' },
-  ).lean();
+  );
   await finishJob(job, 'done', 'resolve_already_applied');
-  if (!updated) return 'superseded';
-  await logEvent(report._id, 'closed_already_fixed', WORKER_ACTOR, updated.workflowGeneration, {
+  // המייל רק אחרי שהכתיבה המותנית אכן התאימה ושינתה את הדיווח (modifiedCount === 1).
+  if (res.modifiedCount !== 1) return 'superseded';
+  await logEvent(report._id, 'closed_already_fixed', WORKER_ACTOR, report.workflowGeneration + 1, {
     reason: 'source_already_applied', path: source.path, lineIndex: source.lineIndex, blobSha: source.blobSha,
   });
   await notifyAlreadyFixed(deps, report._id);
@@ -565,8 +609,13 @@ export async function prepareVerify(job, { config, deps, now }) {
   const rev = currentRevisionOf(report);
   if (!rev || rev.revision !== job.proposalRevision) return { ready: false, result: await failPermanently({ job, report, reason: 'no_proposal', now, deps }) };
 
-  // מקור שמור שאינו שמיש (כבר הוחל, לא אותר...) נשאר רק כשהטיפול בו נקטע (תקלה אחרי שמירתו) — מאתרים מחדש: הסגירה
-  // וההעברה לידני נעשות רק לפי מקור שאותר זה עתה, ומקור כזה לעולם אינו נשלח לשירות כ"מוכן".
+  // תקציב התפיסה במשיכה (agent.js): אחרי שנגמר אין עוד תופעות לוואי — לא שמירת המקור, לא סגירה ולא העברה לידני. הקורא
+  // מחזיר את המשימה לתור בלי ניסיון ובלי פקיעה.
+  const budgetLeft = () => {
+    if (deps.claimBudget && deps.claimBudget.remainingMs() <= 0) throw budgetExceededError();
+  };
+  // מקור שמור שאינו שמיש (כבר הוחל, לא אותר...) נשאר רק כשהטיפול בו נקטע (תקציב, תקלה אחרי שמירתו) — מאתרים מחדש:
+  // הסגירה וההעברה לידני נעשות רק לפי מקור שאותר זה עתה, ומקור כזה לעולם אינו נשלח לשירות כ"מוכן".
   let source = cachedSource(report);
   if (source && !USABLE_STATUSES.has(source.status)) source = null;
   if (!source) {
@@ -576,12 +625,15 @@ export async function prepareVerify(job, { config, deps, now }) {
         override: rev.targetPath ? { path: rev.targetPath, lineIndex: rev.targetLineIndex, expectedLine: rev.originalLine } : null,
       });
     } catch (err) {
+      // תקציב הזמן של תפיסה במשיכה נגמר באמצע (agent.js): אינו כשל של הדיווח — הקורא מחזיר את המשימה לתור.
+      if (err?.budgetExceeded || deps.claimBudget?.remainingMs() <= 0) throw err?.budgetExceeded ? err : budgetExceededError();
       if (isTransientHttp(err)) {
         const result = await scheduleRetryOrHandoff({ job, report, config, now, cls: { cls: FAILURE_CLASS.TRANSIENT, reason: 'source_lookup_failed' }, retryAfterSeconds: null, deps });
         return { ready: false, transient: true, result };
       }
       return { ready: false, result: await failPermanently({ job, report, reason: 'source_not_found', now, deps }) };
     }
+    budgetLeft();
     // המקור שייך לתפיסה ששולחת אותו: הכתיבה מותנית בסימון של אותה תפיסה (fence). תפיסה ישנה שהתעכבה כאן אחרי שתפיסה
     // חדשה כבר נקשרה (ואולי איתרה ושלחה מקור אחר) אינה דורסת אותו — היא אינה נמסרת, וההשוואה של התוצאה החדשה
     // (loadVerifyContext) נשארת מול המקור שנשלח בפועל.
@@ -596,6 +648,8 @@ export async function prepareVerify(job, { config, deps, now }) {
       return { ready: false, result: 'superseded' };
     }
     if (!USABLE_STATUSES.has(source.status)) {
+      // כתיבת המקור (או האיתור) מיצתה את התקציב: בלי סגירה, בלי מייל ובלי ידני — המקור השמור ייבדק שוב בתפיסה הבאה
+      budgetLeft();
       if (isExactlyApplied(source, rev)) return { ready: false, result: await closeAlreadyApplied({ job, report, rev, source, now, deps }) };
       await handoffToManual(report._id, report.workflowGeneration, RESOLVE_HANDOFF[source.status] || 'source_not_found', { now, at: leaseNow(deps, now), verificationStatus: 'not_requested', job });
       await finishJob(job, 'done', `resolve_${source.status}`);
@@ -790,8 +844,8 @@ async function applyServiceDecision({ job, report, rev, source, value, authority
   }
 
   // המשימה עדיין מחזיקה בדיווח באותה תפיסה, ב-lease בתוקף ברגע הכתיבה — אחרת בוטלה/הושהתה/נתפסה מחדש/פגה בזמן ההחלה.
-  const updated = await ErrorReport.findOneAndUpdate({ ...filter, ...heldBy(job, leaseNow(deps, now)) }, update, { returnDocument: 'after' }).lean();
-  if (!updated) {
+  const res = await ErrorReport.updateOne({ ...filter, ...heldBy(job, leaseNow(deps, now)) }, update);
+  if (res.modifiedCount !== 1) {
     // המשימה כבר אינה מחזיקה בדיווח (בוטלה, הושהתה, נתפסה מחדש, ה-lease פג, או שהדיווח השתנה): בלי תופעות לוואי — החבילה
     // שנוצרה לפני העדכון המותנה מוסרת, ואין סגירה, פרסום או מייל. ההחלטה נשמרת להיסטוריה בלבד (stale, כמו כל
     // תשובה מאוחרת — T16). המשימה מסתיימת כמבוטלת רק אם היא עדיין באותה תפיסה (finishJob מותנה ב-fence), ורק כשהדיווח
@@ -801,10 +855,13 @@ async function applyServiceDecision({ job, report, rev, source, value, authority
     if (!(await stillMarkedFor(job))) await finishJob(job, 'cancelled', 'superseded');
     return null;
   }
-  await logEvent(report._id, 'service_decision', { kind: 'service' }, updated.workflowGeneration, {
+  await logEvent(report._id, 'service_decision', { kind: 'service' }, report.workflowGeneration + 1, {
     decision: value.decision, scope: value.approvalScope, reasonCode: value.reasonCode, route: route.route, handoff: route.handoffReason ?? null, authorityExceeded, changeId,
   });
   await finishJob(job, 'done', route.route);
+  // "כבר תוקן" שאומת מקומית אחרי החלטת השירות — אותה הודעה למדווח כמו בסגירה האוטומטית של האתר; רק אחרי שהכתיבה
+  // המותנית (כולל סימון המשימה המחזיקה) אכן שינתה את הדיווח.
+  if (route.route === 'close_already_fixed') await notifyAlreadyFixed(deps, report._id);
   return route.route;
 }
 
@@ -1039,19 +1096,20 @@ async function runPool(items, concurrency, fn) {
 }
 
 // חריגה לא צפויה נספרת כניסיון; בלי זה משימה "רעילה" נתפסת מחדש בכל תפוגת lease, לנצח.
-async function recordCrash(job, { config, deps, now }) {
+export async function recordCrash(job, { config, deps, now, reason = 'worker_error', cls = FAILURE_CLASS.UNKNOWN }) {
   const attempts = job.attempts + 1;
   const retry = computeRetry({
     attempts, maxAttempts: job.maxAttempts, deadlineAt: job.deadlineAt, now,
     baseSeconds: config.verify.backoffBaseSeconds, capSeconds: config.verify.backoffCapSeconds, random: deps.random || Math.random,
   });
-  const failure = { attempts, lastErrorClass: FAILURE_CLASS.UNKNOWN, lastError: 'worker_error' };
+  const failure = { attempts, lastErrorClass: cls, lastError: reason };
   if (!retry.exhausted) return rescheduleJob(job, { ...failure, nextAttemptAt: retry.nextAttemptAt });
-  if (!(await finishJob(job, 'failed', 'worker_error', failure))) return false;
-  // המעבר מותנה בגרסה שהמשימה שנכשלה שייכת לה: כשל של משימה ישנה לא נוגע בגרסה חדשה של הדיווח (שליחה מחודשת).
+  if (!(await finishJob(job, 'failed', reason, failure))) return false;
+  // המעבר מותנה בגרסה שהמשימה שנכשלה שייכת לה: כשל של משימה ישנה (גם כשל הכנה רגעי בתפיסה במשיכה) לא נוגע
+  // בגרסה חדשה של הדיווח (שליחה מחודשת).
   if (job.type === 'verify') {
     const report = await ErrorReport.findById(job.report).lean();
-    if (!isStaleVerifyJob(job, report)) await handoffToManual(report._id, job.generation, 'worker_error', { now });
+    if (!isStaleVerifyJob(job, report)) await handoffToManual(report._id, job.generation, reason, { now });
   } else {
     await ErrorReport.updateOne(
       { _id: job.report, state: 'open', 'publish.changeId': job.changeId },

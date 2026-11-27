@@ -8,9 +8,9 @@ import { withAgent, agentJson, agentNoContent } from '../_shared';
 
 export const dynamic = 'force-dynamic';
 
-export const POST = withAgent(async (request, { agentId, config }) => {
-  // מייל למדווח על סגירה אוטומטית של "כבר תוקן" — אחרי התשובה, לא בתוך התפיסה.
-  const claimed = await claimVerifyJob({ config, agentId, deps: { schedule: (work) => after(work) } });
+export const POST = withAgent(async (request, { agentId, config, startedAt }) => {
+  // מייל למדווח על סגירה אוטומטית של "כבר תוקן" — אחרי התשובה, לא בתוך התפיסה. תקציב התפיסה — מהכניסה לראוט.
+  const claimed = await claimVerifyJob({ config, agentId, startedAt, deps: { schedule: (work) => after(work) } });
   // בלי cron: התפיסה מריצה אצווה מלאה אחרי התשובה כשיש פרסום ממתין או שלא רצה אצווה זמן רב.
   if (claimed.batchDue) triggerWorkerBatch((work) => after(work), 'agent claim trigger failed');
   if (!claimed.job) return agentNoContent(claimed.retryAfter);
