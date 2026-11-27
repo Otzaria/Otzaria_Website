@@ -5,8 +5,8 @@
  * שנגזר מהתוצאה ומזמן ההמתנה. הקריאה מ-GitHub והעדכון ב-DB — ב-closed-pr.js.
  */
 import { splitSourceLines } from './source-text.js';
-import { LOCATE, lineIndex, locateEdit, rawCanon } from './locate-edit.js';
-import { diffHunks } from './rebase-change.js';
+import { LOCATE, canon, canonTokens, lineIndex, locateEdit, rawCanon } from './locate-edit.js';
+import { diffHunks, tokenize } from './rebase-change.js';
 
 export const ABSORPTION = Object.freeze({ ABSORBED: 'absorbed', PENDING: 'pending', CHANGED: 'changed' });
 
@@ -85,87 +85,269 @@ export function editState(line, edit) {
 
 // ---- השינוי הגולמי (תגיות): האיתור מנורמל ואינו רואה תגיות, ולכן "כבר תוקן"/"נקלט" בודקים אותו בנפרד ----
 const TAG_TOKEN = /^<\/?[A-Za-z][^<>]*>$/;
+const TAG_RE = /<\/?[A-Za-z][^<>]*>/g; // אותה הגדרת תגית כמו stripTags ב-locate-edit.js
 const RAW_TOKEN_RE = /<\/?[A-Za-z][^<>]*>|[\p{L}\p{N}\p{M}]+|\s+|[^\p{L}\p{N}\p{M}\s]/gu;
 const WORD_CHAR = /[\p{L}\p{N}]/u;
 const isTagToken = (t) => TAG_TOKEN.test(t);
-const isWordToken = (t) => !isTagToken(t) && WORD_CHAR.test(t);
+const isTextToken = (t) => !isTagToken(t) && t.trim() !== '';
 const tagsOf = (toks) => toks.filter(isTagToken).join('\n');
+const pushTo = (m, k, v) => {
+  const a = m.get(k);
+  if (a) a.push(v);
+  else m.set(k, [v]);
+};
 
 /**
- * קטעים גולמיים שמעידים ששינוי התגיות שאושר לא נקלט. לכל צ'אנק בין המקור להצעה (באסימונים גולמיים: תגית שלמה היא
- * אסימון) שמשנה תגיות: צ'אנק של תגיות בלבד — המקור עצמו (שארית); צ'אנק שמשנה גם טקסט — הטקסט החדש בתוך התגיות
- * הישנות (התיקון נקלט בלי שינוי התגיות). ההקשר: מהשורה, עד מילה שלמה מכל צד ולא לתוך צ'אנק שכן.
- * null — אי אפשר לחשב (שורה ענקית עם שינוי תגיות, או תגיות באמצע טקסט שהשתנה).
+ * שורה כאסימוני האיתור (בדיוק canonTokens) עם התגיות שביניהם: gaps[k] — התגיות שמיד לפני אסימון k, מחוברות
+ * (gaps[toks.length] — אחרי האחרון). null — תגית בתוך מילה (בנרמול היא מתאחדת לאסימון אחד).
  */
-export function rawPartFragments(originalLine, newLine) {
+function tagModel(line) {
+  const s = rawCanon(line);
+  const toks = [];
+  const gaps = [''];
+  const text = (t) => {
+    for (const tok of tokenize(t)) {
+      if (!tok.trim()) continue;
+      toks.push(tok);
+      gaps.push('');
+    }
+  };
+  let last = 0;
+  for (const m of s.matchAll(TAG_RE)) {
+    text(s.slice(last, m.index));
+    gaps[gaps.length - 1] += m[0];
+    last = m.index + m[0].length;
+  }
+  text(s.slice(last));
+  const ref = canonTokens(line);
+  return ref.length === toks.length && ref.every((t, i) => t === toks[i]) ? { toks, gaps } : null;
+}
+
+// חלון חלקי (צד אחד של שינוי התגיות, או האסימונים שבתוכו): לפחות כך מילים כשאין בסיס לבדיקת ייחוד.
+const PARTIAL_MIN_WORDS = 2;
+
+/**
+ * חלונות שמעידים על שינוי התגיות שאושר. לכל צ'אנק בין המקור להצעה (באסימונים גולמיים: תגית שלמה היא אסימון) שמשנה
+ * תגיות: אסימוני ההצעה סביבו — עד מילה מכל צד (וכשבצד אחד אין מילה — עד שתיים בצד השני) — והתגיות שבהצעה בין
+ * אסימוני החלון, וגם בקצה החלון בצד שבו הצ'אנק עצמו נמצא (בלי הקשר: תחילת השורה או סופה).
+ * ועוד חלונות חלקיים, לעותק שפוצל או נערך ליד השינוי (גם המילה שבתוך התגית עצמה) ועדיין נושא את התגית שליד מה
+ * שנשאר: מילים משמאל והתגיות שמיד אחריהן, מילים מימין והתגיות שמיד לפניהן, והאסימונים שבתוך הצ'אנק עם התגיות משני
+ * צדיהם. חלון חלקי נבחר רק כשהוא מזהה את הפסקה — specific(toks): הקצר ביותר שאינו מופיע בבסיס מחוץ לעותקי הפסקה
+ * (ובלי בסיס: PARTIAL_MIN_WORDS מילים לפחות); מילה נפוצה לבדה הייתה "מוצאת" עותקים בכל שורה שנכתבה.
+ * null — אי אפשר לחשב (שורה ענקית עם שינוי תגיות, תגית בתוך מילה, או חלון בלי מילה).
+ */
+function rawWindows(originalLine, newLine, specific) {
   const O = rawCanon(originalLine).match(RAW_TOKEN_RE) || [];
   const N = rawCanon(newLine).match(RAW_TOKEN_RE) || [];
   const hunks = diffHunks(O, N);
   if (!hunks) return tagsOf(O) === tagsOf(N) ? [] : null; // שורה ענקית: בלי שינוי בתגיות — אין מה לבדוק כאן
-  const text = (toks) => toks.filter((t) => !isTagToken(t)).join('').replace(/\s+/g, ' ').trim();
-  const out = [];
-  for (let k = 0; k < hunks.length; k++) {
-    const h = hunks[k];
-    const o = O.slice(h.s, h.e);
-    const n = N.slice(h.ns, h.ne);
-    if (tagsOf(o) === tagsOf(n)) continue; // אין שינוי תגיות — האיתור בודק
-    let body = o;
-    if (text(o) !== text(n)) {
-      let a = 0;
-      while (a < o.length && isTagToken(o[a])) a += 1;
-      let b = o.length;
-      while (b > a && isTagToken(o[b - 1])) b -= 1;
-      if (o.slice(a, b).some(isTagToken)) return null;
-      body = [...o.slice(0, a), ...n.filter((t) => !isTagToken(t)), ...o.slice(b)];
+  const changed = hunks.filter((h) => tagsOf(O.slice(h.s, h.e)) !== tagsOf(N.slice(h.ns, h.ne)));
+  if (!changed.length) return [];
+  const m = tagModel(newLine);
+  if (!m || !tagModel(originalLine)) return null;
+  const T = m.toks;
+  const before = [0]; // אסימוני איתור לפני כל מקום באסימונים הגולמיים של ההצעה
+  for (const t of N) before.push(before.at(-1) + (isTextToken(t) ? 1 : 0));
+  const reach = (from, step, words) => {
+    let k = 0;
+    let w = 0;
+    for (let i = from; w < words && i >= 0 && i < T.length; i += step) {
+      k += 1;
+      if (WORD_CHAR.test(T[i])) w += 1;
     }
-    const lo = k ? hunks[k - 1].e : 0;
-    const hi = k + 1 < hunks.length ? hunks[k + 1].s : O.length;
-    // צד שאין בו מילה עד הצ'אנק השכן או קצה השורה — בלי הקשר (תגית עוטפת בלבד אינה מזהה, ובעותק שעוצב מחדש היא נעלמת)
-    let l = h.s;
-    while (l > lo) if (isWordToken(O[--l])) break;
-    if (!isWordToken(O[l] ?? '')) l = h.s;
-    let r = h.e;
-    while (r < hi) if (isWordToken(O[r++])) break;
-    if (!isWordToken(O[r - 1] ?? '') || r === h.e) r = h.e;
-    const part = [...O.slice(l, h.s), ...body, ...O.slice(h.e, r)].join('');
-    if (!part) return null; // הוספת תגית בשורה בלי מילים — אין קטע מעיד
-    out.push(part);
+    return { k, w };
+  };
+  const out = [];
+  const keys = new Set();
+  const hasWord = (ws, we) => T.slice(ws, we).some((t) => WORD_CHAR.test(t));
+  // החלון [ws, we) עם התגיות שבין אסימוניו, ובקצה שמסומן — גם התגיות שמיד לפניו/אחריו
+  const add = (ws, we, withLead, withTrail) => {
+    const w = { toks: T.slice(ws, we), inner: m.gaps.slice(ws + 1, we), lead: withLead ? m.gaps[ws] : undefined, trail: withTrail ? m.gaps[we] : undefined };
+    const key = JSON.stringify(w);
+    if (!keys.has(key)) {
+      keys.add(key);
+      out.push(w);
+    }
+  };
+  const words = (from, step) => {
+    let n = 0;
+    for (let i = from; i >= 0 && i < T.length; i += step) if (WORD_CHAR.test(T[i])) n += 1;
+    return n;
+  };
+  // הצד האחד: הקצר ביותר (ממילה אחת והלאה, עד קצה השורה) שמזהה את הפסקה
+  const partial = (from, step, edge) => {
+    const all = words(from, step);
+    for (let k = 1; k <= all; k++) {
+      const r = reach(from, step, k);
+      const [ws, we] = step < 0 ? [from + 1 - r.k, from + 1] : [from, from + r.k];
+      if (specific(T.slice(ws, we), k)) {
+        add(ws, we, edge === 'lead', edge === 'trail');
+        return;
+      }
+    }
+  };
+  for (const h of changed) {
+    const a = before[h.ns];
+    const b = before[h.ne];
+    let left = reach(a - 1, -1, 1);
+    let right = reach(b, 1, 1);
+    if (!left.w && right.w) right = reach(b, 1, 2);
+    else if (!right.w && left.w) left = reach(a - 1, -1, 2);
+    const ws = a - left.k;
+    const we = b + right.k;
+    if (!hasWord(ws, we)) return null; // הוספת תגית בשורה בלי מילים — אין חלון מעיד
+    add(ws, we, !left.k, !right.k);
+    partial(a - 1, -1, 'trail');
+    partial(b, 1, 'lead');
+    if (b > a && specific(T.slice(a, b), T.slice(a, b).filter((t) => WORD_CHAR.test(t)).length)) add(a, b, true, true);
   }
   return out;
 }
 
-const rawStreams = new WeakMap();
-function rawStream(lines) {
-  let s = rawStreams.get(lines);
-  if (s === undefined) {
-    s = ` ${lines.map(rawCanon).filter(Boolean).join(' ')} `; // בלי שורות ריקות, כמו זרם האסימונים באיתור
-    rawStreams.set(lines, s);
+const tagStreams = new WeakMap();
+/**
+ * הקובץ כזרם אסימונים אחד (כמו באיתור: בלי שורות ריקות), ולכל אסימון התגיות סביבו: inner[p] — בין p-1 ל-p באותה
+ * שורה (גבול שורה → null, שאינו שווה לתגיות של שורה אחת), lead[p]/trail[p] — מיד לפניו/אחריו בשורה שלו. שורה עם
+ * תגית בתוך מילה: התגיות שלה אינן ידועות (null). at — אסימון → מקומותיו.
+ */
+function tagStream(lines) {
+  let st = tagStreams.get(lines);
+  if (st) return st;
+  st = { toks: [], line: [], inner: [], lead: [], trail: [], at: new Map() };
+  for (let i = 0; i < lines.length; i++) {
+    const m = tagModel(lines[i]);
+    const t = m ? m.toks : canonTokens(lines[i]);
+    for (let k = 0; k < t.length; k++) {
+      pushTo(st.at, t[k], st.toks.length);
+      st.toks.push(t[k]);
+      st.line.push(i);
+      st.lead.push(m ? m.gaps[k] : null);
+      st.trail.push(m ? m.gaps[k + 1] : null);
+      st.inner.push(k && m ? m.gaps[k] : null);
+    }
   }
-  return s;
+  tagStreams.set(lines, st);
+  return st;
 }
-const countIn = (text, part) => {
+
+const rawCounts = new WeakMap();
+const freshMemo = new WeakMap();
+/**
+ * השורות בקובץ הנוכחי שהקומיטים מאז הבסיס כתבו: כל שורה שאין לה עותק זהה (בנרמול הגולמי) שנשאר מהבסיס, וכל
+ * שורה שזהה לשורת המקור (המקור שנשאר, או תאום שלו). שורה שלא השתנתה מהבסיס אינה נספרת: גם אחרי קליטה מלאה היא שם.
+ */
+function writtenLines(texts, baseLines, originalLine) {
+  const hit = freshMemo.get(texts);
+  if (hit && hit.base === baseLines && hit.original === originalLine) return hit.fresh;
+  let counts = rawCounts.get(baseLines);
+  if (!counts) {
+    counts = new Map();
+    for (const l of baseLines) {
+      const k = rawCanon(l);
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    rawCounts.set(baseLines, counts);
+  }
+  const left = new Map(counts);
+  const o = rawCanon(originalLine);
+  const fresh = texts.map((l) => {
+    const k = rawCanon(l);
+    const n = left.get(k) || 0;
+    if (n) left.set(k, n - 1);
+    return !n || k === o;
+  });
+  freshMemo.set(texts, { base: baseLines, original: originalLine, fresh });
+  return fresh;
+}
+
+const otherMemo = new WeakMap();
+/**
+ * הבסיס בלי עותקי הפסקה (שורות שבנרמול זהות למקור או להצעה — שורת הדיווח ותאומיה): חלון חלקי "מזהה את הפסקה"
+ * כשאינו מופיע בשום מקום אחר בבסיס.
+ */
+function otherText(baseLines, change) {
+  const hit = otherMemo.get(baseLines);
+  if (hit && hit.o === change.originalLine && hit.n === change.newLine) return hit.st;
+  const o = canon(change.originalLine);
+  const n = canon(change.newLine);
+  const st = tagStream(baseLines.map((l) => {
+    const c = canon(l);
+    return c === o || c === n ? '' : l;
+  }));
+  otherMemo.set(baseLines, { o: change.originalLine, n: change.newLine, st });
+  return st;
+}
+
+/** מספר המופעים של רצף האסימונים בזרם (גם מעבר לגבולות שורות). */
+function occurrencesIn(st, toks) {
+  let r = 0;
+  let fewest = Infinity;
+  toks.forEach((t, k) => {
+    const c = st.at.get(t)?.length ?? 0;
+    if (c < fewest) {
+      fewest = c;
+      r = k;
+    }
+  });
   let n = 0;
-  for (let i = text.indexOf(part); i !== -1; i = text.indexOf(part, i + 1)) n += 1;
+  for (const q of st.at.get(toks[r]) || []) {
+    const p = q - r;
+    if (p < 0 || p + toks.length > st.toks.length) continue;
+    let k = 0;
+    while (k < toks.length && st.toks[p + k] === toks[k]) k += 1;
+    if (k === toks.length) n += 1;
+  }
   return n;
-};
+}
+
+/** מופע של החלון בזרם, בשורה שנכתבה, שהתגיות בו אינן כמו בהצעה. */
+function wrongCopy(st, w, fresh) {
+  const n = w.toks.length;
+  let r = 0;
+  let fewest = Infinity;
+  w.toks.forEach((t, k) => {
+    const c = st.at.get(t)?.length ?? 0;
+    if (c < fewest) {
+      fewest = c;
+      r = k;
+    }
+  });
+  for (const q of st.at.get(w.toks[r]) || []) {
+    const p = q - r;
+    if (p < 0 || p + n > st.toks.length) continue;
+    let k = 0;
+    while (k < n && st.toks[p + k] === w.toks[k]) k += 1;
+    if (k < n) continue;
+    if (fresh && !st.line.slice(p, p + n).some((i) => fresh[i])) continue;
+    const same = w.inner.every((g, j) => st.inner[p + j + 1] === g)
+      && (w.lead === undefined || st.lead[p] === w.lead)
+      && (w.trail === undefined || st.trail[p + n - 1] === w.trail);
+    if (!same) return true;
+  }
+  return false;
+}
 
 /**
- * האם שינוי התגיות שאושר לא נקלט במלואו — בשום מקום בקובץ (גם מעבר לגבולות שורות): לכל קטע מעיד יש בקובץ יותר
- * מופעים ממה שהיה בו אחרי קליטה מלאה (בבסיס, פחות שורת המקור ועוד ההצעה; בלי הבסיס — רק מה שבהצעה). כך עותק של
- * הפסקה שבו המילה תוקנה והתגיות לא חוסם "כבר תוקן"/"נקלט" גם כשבמקום שאותר עומדת שורה זהה להצעה. ספק → true.
+ * האם שינוי התגיות שאושר לא נקלט במלואו (כלל 9). לכל צ'אנק שמשנה תגיות יש חלון של אסימוני ההצעה סביבו (rawWindows);
+ * כל מופע שלו בקובץ (גם מעבר לגבולות שורות) — בשורה שנכתבה מאז הבסיס, או בשורה שזהה למקור — חייב לשאת בדיוק את
+ * התגיות שבהצעה. כל סטייה (התגית הישנה, תגית שקולה כמו <strong> במקום <b>, תגית זרה שנוספה באמצע כמו <i>, פיצול
+ * לשורות בתוך החלון) → true, גם כשבמקום שאותר עומדת שורה זהה להצעה. בלי הבסיס — כל מופע בקובץ נספר. ספק → true.
  * @param {{originalLine:string, newLine:string}} change
  * @param {string[]} texts  הקובץ הנוכחי (שורות)
  * @param {string[]|null} [baseLines]  הקובץ בבסיס
  */
 export function rawPartHeld(change, texts, baseLines = null) {
-  const parts = rawPartFragments(change.originalLine, change.newLine);
-  if (parts === null) return true;
-  if (!parts.length) return false;
-  const cur = rawStream(texts);
-  const base = Array.isArray(baseLines) ? rawStream(baseLines) : null;
-  const o = rawCanon(change.originalLine);
-  const n = rawCanon(change.newLine);
-  return parts.some((p) => countIn(cur, p) > (base ? countIn(base, p) - countIn(o, p) : 0) + countIn(n, p));
+  const hasBase = Array.isArray(baseLines);
+  // ייחוד חלון חלקי: אינו מופיע בבסיס מחוץ לעותקי הפסקה (מופע בשורה שנכתבה הוא אז עותק שלה)
+  const specific = hasBase
+    ? (toks) => occurrencesIn(otherText(baseLines, change), toks) === 0
+    : (toks, nWords) => nWords >= PARTIAL_MIN_WORDS;
+  const wins = rawWindows(change.originalLine, change.newLine, specific);
+  if (wins === null) return true;
+  if (!wins.length) return false;
+  const st = tagStream(texts);
+  const fresh = hasBase ? writtenLines(texts, baseLines, change.originalLine) : null;
+  return wins.some((w) => wrongCopy(st, w, fresh));
 }
 
 // פירוק הקובץ לשורות — פעם אחת לכל אובייקט קובץ (כמה דיווחים על אותו קובץ באותה אצווה).
@@ -313,7 +495,8 @@ export function anchorTarget(texts, lineIndex, base, range) {
  * אליו המקור איננו וההצעה ישנה, וכל פסקה דומה בקובץ מתוקנת. not_fixed → pending (original_located); ספק →
  * changed (unlocated_<סיבה>). הבדיקות שכאן נשארות כתנאים שמרניים נוספים.
  * כלל 8: האיתור אינו רואה תגיות — "נקלט" גם דורש שבשום מקום בקובץ אין עותק שבו המילה תוקנה ושינוי התגיות שאושר
- * לא (rawPartHeld) → changed (raw_part_not_applied).
+ * לא (rawPartHeld) → changed (raw_part_not_applied). כלל 9: "עותק" כזה הוא כל מופע של המילים שסביב שינוי התגיות
+ * בשורה שנכתבה מאז הבסיס, שהתגיות בו אינן בדיוק כמו בהצעה (גם תגית שקולה או זרה שנוספה באמצע).
  * @param {{content?:string, texts?:string[], lossy?:boolean}|null} file  הקובץ ב-main (null = אינו קיים)
  * @param {{lineIndex:number, originalLine:string, newLine:string, base?:{before:string[], after:string[]}|null, baseLines?:string[]|null}} change
  *   base — שכני שורת היעד בבסיס (לעיגון); baseLines — הקובץ המלא בבסיס, כשידוע (לבדיקה בלי עיגון)

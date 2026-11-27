@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   evaluateAbsorption, closedPrAction, handoffReasonOf, expiredAction, absorptionDeadline, hasRejectedLabel, lineEdit, editState,
-  anchorTarget, sameLine, ABSORPTION, CLOSED_PR_ACTION, PR_CLOSED_HANDOFF,
+  anchorTarget, sameLine, rawPartHeld, ABSORPTION, CLOSED_PR_ACTION, PR_CLOSED_HANDOFF,
 } from './absorption.js';
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
@@ -387,4 +387,45 @@ test('הביקורת הרביעית: שורה זהה להצעה במקום שא�
   const add = qaRun([...at(addBase, li, boldFixed), `תוספת: ${bolded.replace('השגיאה', 'השגחה')}`], addBase, li, bolded, boldFixed);
   assert.notEqual(add.outcome, ABSORPTION.ABSORBED, JSON.stringify(add));
   assert.equal(qaRun(at(addBase, li, boldFixed), addBase, li, bolded, boldFixed).outcome, ABSORPTION.ABSORBED);
+});
+
+// הביקורת החמישית (#312): העותק שזז קלט את המילה, וה-<b> שההצעה הסירה נשאר — אבל עם תגית זרה בתוכו (<i>) או בתגית
+// שקולה (<strong>). קטע גולמי רציף ("הפסקה <b>הייחודית") לא נמצא בעותק כזה, והשורה הזהה להצעה במקום הישן נחשבה ראיה.
+// כלל 9: כל מופע של המילים שסביב שינוי התגיות, בשורה שנכתבה מאז הבסיס, חייב לשאת בדיוק את התגיות שבהצעה.
+test('הביקורת החמישית: עותק שזז ובו התגית שהוסרה נשארה (עם <i> בתוכה, או כ-<strong>) → לא "נקלט", גם עם שורה זהה להצעה במקום הישן', () => {
+  const original = 'באמצע הפסקה <b>הייחודית</b> נשארה המילה השגיאה ויש עוד מה להגיה';
+  const fixed = original.replace('<b>הייחודית</b>', 'הייחודית').replace('השגיאה', 'השגחה');
+  const base = ['הקדמת המחבר', 'פתיחה לענין', 'הכרעת חכמים בעניין זה', original, 'ועתה ראו חידוש נפלא', 'דברי סיום', 'סיום הספר'];
+  const li = 3;
+  const at = (lines, i, line) => lines.map((l, k) => (k === i ? line : l));
+  const copies = {
+    'i בתוך b (השחזור)': original.replace('<b>הייחודית</b>', '<b><i>הייחודית</i></b>').replace('השגיאה', 'השגחה'),
+    'i סביב b': original.replace('<b>הייחודית</b>', '<i><b>הייחודית</b></i>').replace('השגיאה', 'השגחה'),
+    'strong במקום b': original.replace('<b>הייחודית</b>', '<strong>הייחודית</strong>').replace('השגיאה', 'השגחה'),
+    'רק הסוגרת נשארה': original.replace('<b>הייחודית</b>', 'הייחודית</b>').replace('השגיאה', 'השגחה'),
+    'b עם מאפיין': original.replace('<b>הייחודית</b>', '<b class="x">הייחודית</b>').replace('השגיאה', 'השגחה'),
+  };
+  for (const [label, copy] of Object.entries(copies)) {
+    const v = qaRun([...at(base, li, fixed), `תוספת: ${copy}`], base, li, original, fixed);
+    assert.notEqual(v.outcome, ABSORPTION.ABSORBED, `${label}: ${JSON.stringify(v)}`);
+    assert.equal(rawPartHeld({ originalLine: original, newLine: fixed }, [...at(base, li, fixed), `תוספת: ${copy}`], base), true, label);
+  }
+  // שמירה: עותק שזז וקלט את כל השינוי (בלי תגיות) אינו חוסם; וכך גם שורה שלא השתנתה מהבסיס ובה אותן מילים בתגיות אחרות
+  assert.equal(rawPartHeld({ originalLine: original, newLine: fixed }, [...at(base, li, fixed), `תוספת: ${fixed}`], base), false);
+  const quoted = 'וכבר כתבו: הפסקה <i>הייחודית</i> במקום אחר';
+  const qBase = [...base, quoted];
+  assert.equal(rawPartHeld({ originalLine: original, newLine: fixed }, at(qBase, li, fixed), qBase), false);
+  assert.equal(qaRun(at(qBase, li, fixed), qBase, li, original, fixed).outcome, ABSORPTION.ABSORBED);
+  // אבל שורה כזו שנכתבה עכשיו (לא הייתה בבסיס) חוסמת — אין דרך לדעת שאינה עותק של הפסקה
+  assert.equal(rawPartHeld({ originalLine: original, newLine: fixed }, [...at(base, li, fixed), quoted], base), true);
+  // המקור שנשאר בלי שינוי (שורה זהה לשורת המקור) נספר תמיד, גם כשהוא "לא השתנה מהבסיס"
+  assert.equal(rawPartHeld({ originalLine: original, newLine: fixed }, [...base, fixed], base), true);
+  // הוספת תגית בתחילת השורה (בלי הקשר משמאל): עותק שזז בלי התגית בתחילתו → חוסם
+  const plain = 'שלום עולם ומלואו כאן נאמר';
+  const bold = '<b>שלום</b> עולם ומלואו כאן נאמר';
+  const pBase = ['א ב ג', plain, 'ד ה ו'];
+  assert.equal(rawPartHeld({ originalLine: plain, newLine: bold }, [...at(pBase, 1, bold), `תוספת: ${plain}`], pBase), true);
+  assert.equal(rawPartHeld({ originalLine: plain, newLine: bold }, [...at(pBase, 1, bold), `תוספת: ${bold}`], pBase), false);
+  // פסקה שפוצלה לשורות בתוך החלון → חוסם (גבול שורה אינו התגיות שבהצעה)
+  assert.equal(rawPartHeld({ originalLine: original, newLine: fixed }, [...at(base, li, fixed), 'תוספת: באמצע הפסקה', 'הייחודית נשארה המילה השגחה'], base), true);
 });

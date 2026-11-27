@@ -308,6 +308,33 @@ test('הביקורת הרביעית: שורה זהה להצעה במקום שא�
   }
 });
 
+// הביקורת החמישית: אותו פיתיון, והעותק שזז שומר את ה-<b> שההצעה הסירה — עם <i> בתוכו או כ-<strong>. הקטע הגולמי הרציף
+// של הכלל הקודם לא נמצא בעותק כזה; כלל 9 משווה את התגיות בכל מופע של המילים שסביב השינוי לתגיות שבהצעה.
+test('הביקורת החמישית: עותק שזז ובו התגית שהוסרה נשארה (עם <i> בתוכה, או כ-<strong>) → PublishConflict, גם עם שורה זהה להצעה במקום הישן', async () => {
+  const fixedWord = (para) => para.replace('השגיאה', 'השגחה');
+  const copies = {
+    'i בתוך b': fixedWord(TAGP.replace('<b>הייחודית</b>', '<b><i>הייחודית</i></b>')),
+    'strong במקום b': fixedWord(TAGP.replace('<b>הייחודית</b>', '<strong>הייחודית</strong>')),
+  };
+  for (const mode of ['direct', 'pr']) {
+    for (const [label, copy] of Object.entries(copies)) {
+      const { gh, client } = setup({ [PATH]: TAGBASE.join('\n') });
+      const change = changeFor(gh, { lineIndex: 2, originalLine: TAGP, newLine: TAGNEW });
+      gh.pushExternal('main', { [PATH]: [...TAGBASE.map((l) => (l === TAGP ? TAGNEW : l)), `תוספת: ${copy}`].join('\n') });
+      const head = gh.headSha('main');
+      const run = publishChange({ client, target: { branch: 'main', mode, maxRefRetries: 3 }, change, report: report(), attemptId: `pa_r5_${mode}` });
+      await assert.rejects(run, (e) => e instanceof PublishConflict && e.reason === 'source_changed', `${mode}: ${label}`);
+      assert.equal(gh.headSha('main'), head, `${mode}: ${label}`);
+    }
+  }
+  // שמירה: עותק שזז וקלט את כל השינוי → "כבר תוקן" בלי כתיבה
+  const { gh, client } = setup({ [PATH]: TAGBASE.join('\n') });
+  const change = changeFor(gh, { lineIndex: 2, originalLine: TAGP, newLine: TAGNEW });
+  gh.pushExternal('main', { [PATH]: ['שורה חדשה בראש', ...TAGBASE.map((l) => (l === TAGP ? TAGNEW : l))].join('\n') });
+  const res = await publishChange({ client, target: { branch: 'main', mode: 'direct', maxRefRetries: 3 }, change, report: report(), attemptId: 'pa_r5_ok' });
+  assert.equal(res.status, 'already_fixed');
+});
+
 test('הביקורת הרביעית: כל השינוי הגולמי שאושר נקלט — ההצעה עצמה, או העריכה בהקשרה לצד תיקון אחר באותה שורה → already_fixed', async () => {
   const taken = { 'ההצעה עצמה': TAGNEW, 'לצד תיקון אחר בסוף השורה': TAGNEW.replace('להגיה', 'להגהה') };
   for (const mode of ['direct', 'pr']) {

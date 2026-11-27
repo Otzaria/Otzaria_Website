@@ -176,7 +176,12 @@ const COMMON = ['של', 'את', 'על', 'כי', 'לא', 'אם', 'הוא', 'זה'
 const PUNCT = [',', ':', '.'];
 
 function render(L) {
-  const s = L.t.map((x, i) => (L.b === i || x.bold ? `<b>${x.w}</b>` : x.w)).join(L.sp ? '  ' : ' ');
+  // x.i — תגית זרה סביב המילה (בתוך ההדגשה, אם יש); x.strong — הדגשה בתגית שקולה (הביקורת החמישית)
+  const s = L.t.map((x, i) => {
+    const w = x.i ? `<i>${x.w}</i>` : x.w;
+    if (!(L.b === i || x.bold)) return w;
+    return x.strong ? `<strong>${w}</strong>` : `<b>${w}</b>`;
+  }).join(L.sp ? '  ' : ' ');
   const h = L.h ? `<h3>${s}</h3>` : s;
   return L.pf ? h.replaceAll(DAGESH_D, 'דּ') : h;
 }
@@ -193,6 +198,9 @@ function render(L) {
  * עריכת מילים — רק בפסקה בת 6 מילים לפחות, ועד שתי עריכות (מעבר לזה זו כבר פסקה אחרת).
  * raw (הביקורת הרביעית): ההצעה גם מוסיפה או מסירה תגית סביב מילה בפסקה — שינוי גולמי שהנרמול אינו רואה — ו-main
  * קולט אותו בכל העותקים או לא קולט אותו כלל, בלי תלות בתיקון המילה. rawTruth: בכל עותקי הפסקה המדווחת התגית כמו בהצעה.
+ * והביקורת החמישית: עותק של הפסקה מקבל סביב המילה תגית זרה (<i>, גם בתוך ההדגשה) או הדגשה בתגית שקולה (<strong>);
+ * ו-rawAttack — הפסקה זזה עם תוספת בראשה ועם עיצוב כזה, ובמקומה הישן שורה זהה להצעה (גם בתגיות). rawTruth לפי
+ * ההדגשה בפועל (<strong> מודגש, <i> אינו משנה).
  * בלי raw — אותם תרחישים בדיוק כמו קודם.
  */
 function scenario(seed, { reshape = false, raw = false } = {}) {
@@ -412,7 +420,30 @@ function scenario(seed, { reshape = false, raw = false } = {}) {
     }
     if (rawPart && chance(0.5)) main.forEach(applyRaw);
   };
-  const all = reshape ? { ...ops, ...reshapeOps } : ops;
+  // רק בתרחישי raw — שאר התרחישים בדיוק כמו קודם
+  const restyle = (L) => L.t.forEach((x) => {
+    if (x.p && x.id === rawPart.id) {
+      if (chance(0.5)) x.i = 1;
+      else x.strong = 1;
+    }
+  });
+  const rawOps = {
+    restyle() {
+      const idx = descIdx();
+      if (idx.length) restyle(main[pick(idx)]);
+    },
+    rawAttack() {
+      const idx = descIdx();
+      if (!idx.length) return;
+      const i = pick(idx);
+      const [L] = main.splice(i, 1);
+      main.splice(i, 0, { t: fixedP.t.map((x) => ({ w: x.w, bold: x.bold })), h: fixedP.h });
+      const M = { ...L, t: [{ w: word() }, ...L.t], b: undefined };
+      restyle(M);
+      main.splice(place(main.length), 0, M);
+    },
+  };
+  const all = { ...ops, ...(reshape ? reshapeOps : {}), ...(rawPart ? rawOps : {}) };
   const names = Object.keys(all);
   const n = int(6);
   const fixAt = int(n + 1);
@@ -460,8 +491,14 @@ function scenario(seed, { reshape = false, raw = false } = {}) {
     applyFix(W);
     return W;
   }));
-  // מה שמוצג בפועל: הדגשה של השורה (L.b) או של המילה
-  const rawTruth = !rawPart || main.every((L) => L.t.every((x, i) => !(x.p && x.id === rawPart.id) || (L.b === i || Boolean(x.bold)) === rawPart.bold));
+  // מה שמוצג בפועל: הדגשה של השורה (L.b) או של המילה. כמו "פתוח" בטקסט: עותק של המילה שנותק מכל שכניו המקוריים
+  // בזרם (הפסקה נחתכה בדיוק סביבו והחלקים פוזרו) אינו ניתן לייחוס בשום טקסט — אינו נספר.
+  const rawTruth = !rawPart || (() => {
+    const all = main.flatMap((L) => L.t.map((x, i) => ({ x, bold: L.b === i || Boolean(x.bold) })));
+    const nb = (j, id) => all[j] !== undefined && all[j].x.p && all[j].x.id === id;
+    const cut = (x, j) => P.t.length > 1 && !nb(j - 1, x.id - 1) && !nb(j + 1, x.id + 1);
+    return all.every(({ x, bold }, j) => !(x.p && x.id === rawPart.id) || cut(x, j) || bold === rawPart.bold);
+  })();
   return {
     kind, mode, truth: truthOf(main), open: anchoredOpen(main), truthIfWritten, benign, li, original: render(P), proposed: render(fixedP), baseTexts: base.map(render), mainTexts: main.map(render),
     raw: Boolean(rawPart), rawTruth,

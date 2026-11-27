@@ -744,3 +744,19 @@ test('הביקורת החמישית: PR שנפתח מחדש וקריאת המק�
   assert.match(r.publish.lastError, /^pr_source_check_failed:503$/);
 });
 
+// הביקורת החמישית: העותק שזז קלט את המילה, וה-<b> שההצעה הסירה נשאר עם <i> בתוכו; במקום הישן שורה זהה להצעה.
+test('הביקורת החמישית: תיקון שזז ובו התגית שהוסרה נשארה עם <i> בתוכה אינו "נקלט"', async () => {
+  const original = 'באמצע הפסקה <b>הייחודית</b> נשארה המילה השגיאה ויש עוד מה להגיה';
+  const proposed = original.replace('<b>הייחודית</b>', 'הייחודית').replace('השגיאה', 'השגחה');
+  const partial = original.replace('<b>הייחודית</b>', '<b><i>הייחודית</i></b>').replace('השגיאה', 'השגחה');
+  const lines = ['הקדמת המחבר', 'פתיחה לענין', 'הכרעת חכמים בעניין זה', original, 'ועתה ראו חידוש נפלא', 'דברי סיום', 'סיום הספר'];
+  gh.pushExternal('main', { [PATH]: fileOf(lines) });
+  const id = await ingest('round5-partial-raw', 3, { lines, proposed });
+  const n = (await approved(id)).publish.prNumber;
+  gh.closePull(n);
+  gh.pushExternal('main', { [PATH]: fileOf([...lines.slice(0, 3), proposed, ...lines.slice(4), `תוספת: ${partial}`]) });
+  await work(at(2));
+  const r = await load(id);
+  assert.notEqual(r.closeReason, 'pr_absorbed');
+  assert.equal(r.publish.absorptionCheck?.detail, 'raw_part_not_applied');
+});
