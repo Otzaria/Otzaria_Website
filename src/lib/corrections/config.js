@@ -60,6 +60,8 @@ export const AGENT_CLAIM_BUDGET_MS = 20_000;
 export const AGENT_BUSY_RETRY_SECONDS = 5;
 // במשיכה התפיסות מריצות אצווה מלאה (פרסום, מעקב PR) כשלא רצה אחת זמן כזה — גם בלי cron.
 export const AGENT_BATCH_INTERVAL_SECONDS = 600;
+// מרווח מינימלי בין אצוות שהתפיסה מפעילה — גם כשיש פרסום ממתין (פרסום תקוע לא הופך כל תפיסה לאצווה).
+export const AGENT_BATCH_MIN_GAP_SECONDS = 45;
 export const AGENT_MAX_RESULT_BYTES = 1024 * 1024;
 // דף הבריאות: שירות שלא פנה זמן רב כשיש משימות ממתינות.
 export const AGENT_STALE_SECONDS = 1_800;
@@ -218,6 +220,7 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
       claimBudgetMs: AGENT_CLAIM_BUDGET_MS,
       busyRetrySeconds: AGENT_BUSY_RETRY_SECONDS,
       batchIntervalSeconds: AGENT_BATCH_INTERVAL_SECONDS,
+      batchMinGapSeconds: AGENT_BATCH_MIN_GAP_SECONDS,
       maxResultBytes: AGENT_MAX_RESULT_BYTES,
       staleSeconds: AGENT_STALE_SECONDS,
     },

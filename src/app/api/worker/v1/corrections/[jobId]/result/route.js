@@ -15,6 +15,8 @@ export const POST = withAgent(async (request, { agentId, config, params }) => {
   if (!read.ok) return agentFailure(read);
   const result = await submitVerifyResult({
     config, agentId, jobId: params.jobId, token: request.headers.get('x-lease-token'), raw: read.raw, body: read.body,
+    // מייל "כבר תוקן" למדווח (כשהשירות קבע כך והאתר אימת) — אחרי התשובה.
+    deps: { schedule: (work) => after(work) },
   });
   if (!result.ok) return agentFailure(result);
   // אישור שמותר לפרסום: אצווה מיד אחרי התשובה (כמו אחרי אישור מתנדב), כדי שהפרסום לא ימתין ל-cron.

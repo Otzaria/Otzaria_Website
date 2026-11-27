@@ -8,8 +8,21 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
 const afterSpy = vi.hoisted(() => vi.fn())
 vi.mock('next/server', async (importOriginal) => ({ ...(await importOriginal()), after: afterSpy }))
+// תקציב תפיסה מוקטן לבדיקה (במקום 20 שניות); null — ההגדרות כפי שנטענו.
+const budgetOverride = vi.hoisted(() => ({ ms: null }))
+vi.mock('@/lib/corrections/runtime', async (importOriginal) => {
+  const mod = await importOriginal()
+  return {
+    ...mod,
+    loadCorrectionsConfig: async (...args) => {
+      const c = await mod.loadCorrectionsConfig(...args)
+      return budgetOverride.ms === null ? c : { ...c, agent: { ...c.agent, claimBudgetMs: budgetOverride.ms } }
+    },
+  }
+})
 
 import ErrorReport from '@/models/ErrorReport'
+import CorrectionJob from '@/models/CorrectionJob'
 import CorrectionsAgentState from '@/models/CorrectionsAgentState'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
 import { FakeGitHub } from '@/lib/corrections/testing/fake-github.js'
@@ -56,6 +69,8 @@ beforeEach(async (ctx) => {
   vi.setSystemTime(new Date('2026-09-15T10:00:00Z'))
 })
 afterEach(() => {
+  budgetOverride.ms = null
+  vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
@@ -108,6 +123,32 @@ describe('/api/worker/v1/corrections', () => {
     expect(push.res.status).toBe(403)
     expect(push.json).toEqual({ error: 'agent_api_disabled' })
     expect(await CorrectionsAgentState.countDocuments({})).toBe(0)
+  })
+
+  it('ביקורת #314: תקציב התפיסה נספר מהכניסה לראוט — "נראה לאחרונה" איטי מעבר לתקציב → 204 בלי משימה ובלי lease; מתחתיו — נמסרת', async () => {
+    // בקנה מידה מוקטן: תקציב של שנייה, ועיכוב של 1.05 שניות (בייצור: 21 שניות מול 20) בכתיבת "נראה לאחרונה" — לפני
+    // שהראוט מגיע לתפיסה. השעון מדומה (Date), כך שאין המתנה אמיתית.
+    budgetOverride.ms = 1000
+    const r = await ingest('r-budget-entry')
+    const original = CorrectionsAgentState.updateOne.bind(CorrectionsAgentState)
+    let delayMs = 1050
+    vi.spyOn(CorrectionsAgentState, 'updateOne').mockImplementation((filter, update, ...rest) => {
+      if (update?.$set?.lastRoute) vi.setSystemTime(Date.now() + delayMs)
+      return original(filter, update, ...rest)
+    })
+    const slow = await claim()
+    expect(slow.res.status).toBe(204)
+    expect(slow.text).toBe('')
+    expect(slow.res.headers.get('retry-after')).toBe('5')
+    expect(await CorrectionJob.countDocuments({ status: 'leased' })).toBe(0)
+    expect(await CorrectionJob.countDocuments({})).toBe(0)
+    expect((await ErrorReport.findById(r._id).lean()).dispatch.verify).toBe(true)
+    expect(afterSpy).not.toHaveBeenCalled()
+    delayMs = 950
+    const fine = await claim()
+    expect(fine.res.status).toBe(200)
+    expect(fine.json.request.report_id).toBe(String(r._id))
+    expect(await CorrectionJob.countDocuments({ status: 'leased' })).toBe(1)
   })
 
   it('אין עבודה → 204 בלי גוף, Retry-After ו-no-store; "נראה לאחרונה" וגרסה נרשמים', async () => {

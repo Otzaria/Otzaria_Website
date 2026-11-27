@@ -12,9 +12,10 @@ import { newLeaseToken, hashLeaseToken, isLeaseTokenShape } from '../servicePlug
 import { validateVerifyResponse } from './verify-protocol.js';
 import {
   prepareVerify, loadVerifyContext, applyVerifyResponse, finishJob, handoffToManual, recordLateDecision,
-  sweepExpiredVerifyJobs, dispatchVerifyOutbox, drainVerifyToManual, isStaleVerifyJob, heldBy, withLeaseClock, leaseNow, extendVerifyMarker,
-  allocateVerifyLease,
+  sweepExpiredVerifyJobs, dispatchVerifyOutbox, drainVerifyToManual, isStaleVerifyJob, heldBy, recordCrash, isTransientPrepareError,
+  withLeaseClock, leaseNow, extendVerifyMarker, allocateVerifyLease, budgetExceededError,
 } from './worker.js';
+import { FAILURE_CLASS } from './classify.js';
 import { logEvent, WORKER_ACTOR } from './store.js';
 import { restGate, restWindowAhead } from './rest-gate.js';
 
@@ -74,12 +75,15 @@ const logFailure = (what, job, err) => console.error(`[corrections-agent] ${what
 
 /**
  * אצווה מלאה דרושה: פרסום ממתין ב-outbox, או שאף אצווה לא רצה AGENT_BATCH_INTERVAL_SECONDS. כך התפיסות
- * של הסוכן מקדמות גם פרסום, ניסיונות חוזרים ומעקב PR כשאין cron.
+ * של הסוכן מקדמות גם פרסום, ניסיונות חוזרים ומעקב PR כשאין cron. בכל מקרה לא יותר מאחת בערך כל
+ * AGENT_BATCH_MIN_GAP_SECONDS: פרסום תקוע ב-outbox לא הופך כל תפיסה (פעם בדקה, או מהר יותר מסוכן פגום) לאצווה.
  */
 async function isBatchDue({ config, now }) {
-  if (config.publish.mode !== 'disabled' && await ErrorReport.exists({ 'dispatch.publish': true, state: 'open' })) return true;
   const [beat] = await WorkerHeartbeat.find({}).sort({ lastBeatAt: -1 }).limit(1).select('lastBeatAt').lean();
-  return !beat || now.getTime() - new Date(beat.lastBeatAt).getTime() >= config.agent.batchIntervalSeconds * 1000;
+  const sinceMs = beat ? now.getTime() - new Date(beat.lastBeatAt).getTime() : Infinity;
+  if (sinceMs < config.agent.batchMinGapSeconds * 1000) return false;
+  if (sinceMs >= config.agent.batchIntervalSeconds * 1000) return true;
+  return config.publish.mode !== 'disabled' && Boolean(await ErrorReport.exists({ 'dispatch.publish': true, state: 'open' }));
 }
 
 /** תפיסה או תוצאה של הסוכן — עבודת התור עצמה (דף הבריאות: אין "worker לא רץ" כשהסוכן פעיל). */
@@ -91,16 +95,40 @@ export async function recordAgentWork({ agentId, now = new Date() }) {
 /**
  * תפיסת משימת הבדיקה הבאה. דיווח שהמקור שלו לא אותר עובר לידני ו"כבר הוחל" מדויק נסגר — שניהם
  * לעולם לא נמסרים — ונבדקת המשימה הבאה. batchDue — על הראוט להריץ אצווה מלאה אחרי התשובה.
+ * תקציב הזמן (AGENT_CLAIM_BUDGET_MS) נספר מתחילת הבקשה — מהכניסה לראוט (startedAt), כולל האימות, המסד ו"נראה
+ * לאחרונה" — ומכסה כל פעולה בה: פעולות התור, כתיבות למסד וקריאות GitHub. בקשה שכבר חרגה ממנו לפני התפיסה אינה נוגעת
+ * בתור כלל, והוא נבדק שוב אחרי כל שלב ("נראה לאחרונה", המטאטא, ה-outbox, כל תפיסה וההכנה שלה) וממש לפני המסירה; כל
+ * העבודה שאחרי המסירה נעשית לפניה, כך שאין lease באסימון שלא נמסר. מרגע שהתקציב נגמר אין עוד תופעות לוואי: תשובת
+ * "אין עבודה" (204) בלי outbox, בלי משימה ובלי אצווה (batchDue=false).
+ * @param {{startedAt?:number}} args startedAt — קריאת השעון (deps.clock או Date.now) בתחילת הבקשה; בלעדיו — מכאן
  * @returns {Promise<{job:({jobId:string, leaseToken:string, leaseExpiresAt:Date, request:object}|null), retryAfter?:number, batchDue:boolean}>}
  *   request — גוף חוזה B §3.1 בדיוק
  */
-export async function claimVerifyJob({ config, agentId, deps = {}, now = new Date() }) {
-  const claimed = await claimNext({ config, agentId, deps: withLeaseClock(deps, now), now });
+export async function claimVerifyJob({ config, agentId, deps = {}, now = new Date(), startedAt = null }) {
+  const clock = deps.clock || Date.now;
+  const fromRequestStart = Number.isFinite(startedAt);
+  const started = fromRequestStart ? startedAt : clock();
+  const budget = {
+    remainingMs: () => config.agent.claimBudgetMs - (clock() - started),
+    exceeded: () => clock() - started >= config.agent.claimBudgetMs,
+  };
+  // הבקשה התעכבה עוד לפני התפיסה (אימות, מסד), או ש"נראה לאחרונה" עצמו מיצה את התקציב: הלקוח עלול כבר להתנתק —
+  // בלי משימה, בלי lease, בלי לגעת בתור ובלי אצווה; הסוכן ינסה שוב בקרוב.
+  const spent = { job: null, retryAfter: config.agent.busyRetrySeconds, batchDue: false };
+  if (fromRequestStart && budget.exceeded()) return spent;
+  const lease = withLeaseClock(deps, now);
   await recordAgentWork({ agentId, now });
-  return { ...claimed, batchDue: await isBatchDue({ config, now }) };
+  if (budget.exceeded()) return spent;
+  const batchDue = await isBatchDue({ config, now });
+  const claimed = await claimNext({ config, agentId, deps: lease, now, budget });
+  // 204 אחרי שהתקציב נגמר (באחד השלבים, או בדרך החוצה) — בלי אצווה לצידו.
+  if (!claimed.job && budget.exceeded()) return { ...claimed, batchDue: false };
+  return { ...claimed, batchDue };
 }
 
-async function claimNext({ config, agentId, deps, now }) {
+async function claimNext({ config, agentId, deps, now, budget }) {
+  const spent = () => ({ job: null, retryAfter: config.agent.busyRetrySeconds });
+  if (budget.exceeded()) return spent();
   if (!config.verify.enabled) {
     // הושהתה/כובתה: כל משימה פתוחה מבוטלת מיד והדיווחים עוברים לידני (כמו באצווה) — בלי לחכות ל-cron,
     // ובלי שהסוכן ייענש בפקיעת lease כשהבדיקה תחודש.
@@ -109,21 +137,26 @@ async function claimNext({ config, agentId, deps, now }) {
   }
   // הסוכן פונה כל דקה כשאין עבודה, ולכן גם בלי cron: מטאטא ו-outbox רצים כאן (שניהם אידמפוטנטיים).
   await sweepExpiredVerifyJobs({ now });
+  // כל שלב נבדק מול התקציב לפני הבא: מטאטא שמיצה אותו אינו ממשיך ל-outbox (שיוצר משימות).
+  if (budget.exceeded()) return spent();
   await dispatchVerifyOutbox({ config, now });
   // שבת/יו"ט עכשיו, או חלון מנוחה שיתחיל לפני שה-lease ייגמר — לא מוסרים משימה (היא לא תוכל להסתיים).
   const rest = restGate(now);
   if (rest.closed) return { job: null, retryAfter: rest.retryAfter };
   const ahead = restWindowAhead(now, config.agent.leaseSeconds * 1000);
   if (ahead) return { job: null, retryAfter: ahead.retryAfter };
-  const clock = deps.clock || Date.now;
-  const started = clock();
   for (let n = 0; n < config.agent.claimScan; n++) {
-    // תקציב זמן: תפיסה שאיתרה כמה מקורות איטיים חוזרת לפני שהלקוח מתנתק ב-timeout (ואז היה נשאר lease
-    // באסימון שלא נמסר). הבדיקה לפני תפיסת המשימה הבאה, כך שאין משימה שנתפסה ולא נמסרה.
-    if (n > 0 && clock() - started >= config.agent.claimBudgetMs) return { job: null, retryAfter: config.agent.busyRetrySeconds };
+    // תקציב זמן: תפיסה שהתעכבה (תור, מסד, מקורות איטיים) חוזרת לפני שהלקוח מתנתק ב-timeout (ואז היה נשאר lease
+    // באסימון שלא נמסר). נבדק לפני כל תפיסה — גם הראשונה, אחרי פעולות התור — ושוב לפני המסירה.
+    if (budget.exceeded()) return spent();
     const token = newLeaseToken();
     const job = await takeNextJob({ config, agentId, tokenHash: hashLeaseToken(token), now });
     if (!job) return { job: null, retryAfter: config.agent.idleRetrySeconds };
+    // לקיחת המשימה עצמה (תור או מסד איטיים) מיצתה את התקציב: חוזרת לתור לפני כל הכנה — בלי סימון, בלי ניסיון ובלי פקיעה.
+    if (budget.exceeded()) {
+      await returnToQueue(job, now, { reason: 'claim_budget' }).catch((e) => logFailure('budget release failed', job, e));
+      return spent();
+    }
     if (job.leaseExpiries >= config.agent.maxLeaseExpiries) {
       // הסוכן איבד את המשימה שוב ושוב (קריסה/ניתוק חוזרים, או דיווח שמפיל אותו) → ידני בסיבה נפרדת.
       await failJobToManual(job, 'lease_expired_repeatedly', now, { leaseExpiries: job.leaseExpiries });
@@ -131,8 +164,11 @@ async function claimNext({ config, agentId, deps, now }) {
     }
     let prep;
     try {
-      prep = await prepareVerify(job, { config, deps, now });
+      // יתרת התקציב מועברת להכנה כ-timeout לקריאות GitHub (worker.js, withClaimBudget).
+      prep = await prepareVerify(job, { config, deps: { ...deps, claimBudget: { remainingMs: budget.remainingMs } }, now });
       if (prep.ready) {
+        // וגם לפני הסימון "בבדיקה": אחרי שהתקציב נגמר אין כתיבה לדיווח (המשימה חוזרת לתור למטה)
+        if (budget.exceeded()) throw budgetExceededError();
         const res = await ErrorReport.updateOne({ _id: prep.report._id, workflowGeneration: prep.report.workflowGeneration, ...heldBy(job, leaseNow(deps, now)) }, { $set: { 'verification.status': 'in_progress' } });
         // הדיווח עבר לאחר בין ההכנה לכאן (השהיה, מתנדב): המשימה אינה נמסרת.
         if (res.matchedCount !== 1) {
@@ -141,8 +177,18 @@ async function claimNext({ config, agentId, deps, now }) {
         }
       }
     } catch (err) {
-      // דיווח אחד שמפיל את ההכנה אינו מפיל את התפיסה ואינו משאיר lease באסימון שלא נמסר: לידני, והלאה.
       logFailure('prepare failed', job, err);
+      if (err?.budgetExceeded) {
+        // התקציב נגמר באמצע ההכנה: אינו כשל של הדיווח. המשימה חוזרת לתור מיד, בלי ניסיון, בלי פקיעה ובלי lease.
+        await returnToQueue(job, now, { reason: 'claim_budget' }).catch((e) => logFailure('budget release failed', job, e));
+        return spent();
+      }
+      if (isTransientPrepareError(err)) {
+        // תקלת מסד/רשת רגעית: ניסיון נספר ו-backoff (כמו בדחיפה); לידני רק כשהניסיונות נגמרו.
+        await recordCrash(job, { config, deps, now, reason: 'prepare_failed', cls: FAILURE_CLASS.TRANSIENT }).catch((e) => logFailure('prepare retry failed', job, e));
+        return { job: null, retryAfter: config.agent.idleRetrySeconds };
+      }
+      // כשל דטרמיניסטי של דיווח אחד: לידני, והלאה (בלי להפיל את התפיסה ובלי lease באסימון שלא נמסר).
       await failJobToManual(job, 'prepare_failed', now).catch((e) => logFailure('prepare cleanup failed', job, e));
       continue;
     }
@@ -151,10 +197,18 @@ async function claimNext({ config, agentId, deps, now }) {
       if (prep.transient) return { job: null, retryAfter: config.agent.idleRetrySeconds };
       continue;
     }
+    // הכנה וכתיבות למסד שהתעכבו מעבר לתקציב — המשימה חוזרת לתור מיד, בלי ניסיון, בלי פקיעה ובלי lease (האסימון לא
+    // נמסר ובוטל), והסוכן ינסה שוב בקרוב. נבדק אחרי ההכנה (בלי לרשום "נתפסה"), ושוב ממש לפני המסירה.
+    const release = async () => {
+      await returnToQueue(job, now, { reason: 'claim_budget' }).catch((e) => logFailure('budget release failed', job, e));
+      return spent();
+    };
+    if (budget.exceeded()) return release();
     const { report } = prep;
     await logEvent(report._id, 'verify_claimed', AGENT_ACTOR, report.workflowGeneration, {
       agentId, leaseExpiresAt: job.leaseExpiresAt, leaseExpiries: job.leaseExpiries,
     });
+    if (budget.exceeded()) return release();
     return { job: { jobId: String(job._id), leaseToken: token, leaseExpiresAt: job.leaseExpiresAt, request: prep.request } };
   }
   // נגמרה הסריקה וכל המשימות שנבדקו דולגו (לידני / נסגרו) — ייתכן שיש עוד עבודה: לחזור מהר.

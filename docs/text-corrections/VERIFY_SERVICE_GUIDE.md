@@ -192,6 +192,9 @@ POST {SITE}/api/worker/v1/corrections/{jobId}/result       → 200 {outcome}
 4. `result` עם תשובה בפורמט סעיף 4 (`processing_status: "completed"`). אין 202/polling במשיכה: `pending` נדחה
    ב-422. `processing_status: "failed"` + `reason_code: "service_capacity"` מחזיר את המשימה לתור בלי לצרוך ניסיון
    (כמו `release`), אבל `release` עדיף כשמוותרים על המשאבים באמצע.
+   `release` שני באותו אסימון מחזיר 409; `release` אחרי שה-lease פג (לפני תפיסה מחדש) מתקבל בלי לספור פקיעה.
+   דופק קרוב לחלון מנוחה מחזיר `cancelled` גם אם ההחזרה לתור הפסידה במרוץ — זה אינו מזיק.
+   את `CORRECTIONS_AGENT_SECRET` מייצרים מ-CSPRNG (`openssl rand -base64 32`, base64url או hex); סוד של ספרות בלבד עלול להידחות.
 
 מה לעשות עם כל תשובה:
 
