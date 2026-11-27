@@ -7,7 +7,7 @@
 | # | חוזה | צד שולח | צד מקבל | סעיף |
 |---|------|---------|---------|------|
 | A | קליטת דיווח | תוכנת אוצריא (Flutter) | האתר (`POST /api/reportingerrors`) | §2 |
-| B | בקשת בדיקה | האתר (worker) | שירות הבדיקה החיצוני (קוד סגור, עתידי) | §3 |
+| B | בקשת בדיקה | האתר (worker; במשיכה — השירות מושך אותה מהאתר) | שירות הבדיקה החיצוני (קוד סגור, עתידי) | §3 (משיכה: §3.7) |
 | C | digest קנוני | שני הצדדים | — | §4 |
 
 עותק של ה-fixtures לחישוב ה-digest נמצא גם בריפו התוכנה
@@ -252,6 +252,13 @@ service_capacity         unsupported_capability   manual_required
 בלבד** (`CORRECTIONS_VERIFY_URL`, `CORRECTIONS_VERIFY_SECRET`). הדפדפן והתוכנה לעולם
 לא פונים אליו.
 
+שני אופני העברה (`CORRECTIONS_VERIFY_TRANSPORT`): **`push`** (ברירת המחדל, §3.1–3.6) — האתר פונה
+לשירות; **`pull`** (§3.7) — השירות מושך משימות מהאתר. גופי הבקשה והתשובה, האימות והניתוב זהים
+בשניהם. בשניהם דיווח שהמקור שלו לא אותר אינו נשלח לשירות (ידני), וגם לא דיווח שהתיקון שלו כבר הוחל בוודאות —
+נסגר באתר כ-`closed_already_fixed`, והמדווח מקבל את אותה הודעה כמו בסגירת מתנדב. "בוודאות" = כל התנאים:
+בשורה המדווחת נמצאת בדיוק השורה המלאה המוצעת; השורה המקורית אינה מופיעה בשום מקום בקובץ; השורה המוצעת אינה
+ריקה, כותרת או תגיות בלבד, ויש בה ≥15 תווים נראים; והיא מופיעה בקובץ פעם אחת בלבד. אחרת — ידני כמו קודם.
+
 ### 3.1 בקשה — `POST {CORRECTIONS_VERIFY_URL}/v1/verify`
 
 כותרות: `Authorization: Bearer <secret>`, `Content-Type: application/json`,
@@ -378,7 +385,7 @@ approved + technical_and_content         → publish  אם: authority=technical_
                                              && change_digest תואם && מקור אומת מחדש לפני הפרסום
                                            אחרת → manual queue
 needs_review / conflict                  → manual queue (עם candidates/message)
-already_fixed (אומת מקומית)              → closed_already_fixed, בלי קומיט
+already_fixed (אומת מקומית בכלל המחמיר)   → closed_already_fixed, בלי קומיט (already-applied.js, מול HEAD)
 already_fixed (לא אומת)                  → manual queue
 rejected + authority מתירה דחייה אוטומטית → closed_rejected (reason_code נשמר)
 rejected אחרת                            → manual queue (manual_reject_review)
@@ -395,6 +402,95 @@ rejected אחרת                            → manual queue (manual_reject_rev
 גבולות retry (קבועים באתר): `VERIFY_MAX_ATTEMPTS` (6) ו-
 `VERIFY_MAX_TOTAL_SECONDS` (86400). מיצוי → ידני
 (`handoff_reason: retries_exhausted | deadline_exhausted`).
+
+### 3.7 העברה במשיכה (`CORRECTIONS_VERIFY_TRANSPORT=pull`)
+
+השירות רץ מאחורי NAT, בלי כתובת ציבורית: הוא פונה לאתר, תופס משימה, מחזיק אותה ב-lease ומוסר
+את ההחלטה. האתר אינו פונה לשירות כלל (אין `CORRECTIONS_VERIFY_URL`). `request` שהשירות מקבל הוא
+גוף §3.1 **בדיוק**, וגוף התוצאה הוא תשובת §3.2; האימות (§3.4) והניתוב (§3.5) הם אותו קוד כמו בדחיפה.
+
+**אימות וכללים לכל הנתיבים:**
+- `Authorization: Bearer <CORRECTIONS_AGENT_SECRET>` — השוואה בזמן קבוע. הסוד חייב להיות חזק: ≥43 תווי ASCII
+  מודפסים, או hex/base64 שמפוענח ל-≥32 בתים; ובנוסף לפחות 10 תווים שונים, אנטרופיה משוערת של ≥128 ביט ובלי
+  תבנית חוזרת (סוד אקראי ב-base64url או ב-hex עובר; `'S'×48` לא). חייב להיות **שונה מכל סוד אחר בשרת**
+  (`CRON_SECRET`, `OCR_WORKER_SECRET`, `CORRECTIONS_VERIFY_SECRET`, `DICTA_LIBRARY_GITHUB_TOKEN`, `NEXTAUTH_SECRET` ועוד).
+- `X-Agent-Id: <CORRECTIONS_AGENT_ID>` — חובה, `[A-Za-z0-9._-]{1,64}`, זהה להגדרת האתר. `X-Agent-Version` —
+  אופציונלי (ASCII מודפס, עד 64 תווים), לתצוגה בדף הבריאות. כל קריאה מאומתת מעדכנת "נראה לאחרונה".
+- כל תשובה היא JSON עם `Cache-Control: no-store` (חוץ מ-204 בלי גוף), שגיאה היא `{"error":"<code>"}`
+  (ב-422 גם `reason`), ואין הפניות.
+- **שבת ויו"ט:** כל נתיב בודק בעצמו, לפני האימות ובלי שום כתיבה, את חלונות המנוחה של `src/lib/pageProof/lease.js`
+  (מיום שישי/ערב חג ב-12:00 עד מוצאי שבת/חג ב-22:00, שעון ירושלים) ומחזיר `503 shabbat` עם `Retry-After` עד סוף
+  החלון (לכל היותר 3600). הבדיקה אופליין ונכשלת-סגורה: אינה תלויה ב-Hebcal ואינה נעקפת ב-User-Agent. שער ה-proxy
+  (Hebcal) חוסם בנוסף, לפי הזמנים בפועל.
+
+| נתיב | תשובה תקינה | שגיאות |
+|---|---|---|
+| `POST /api/worker/v1/corrections/claim` (בלי גוף) | `200 {jobId, leaseToken, leaseExpiresAt, request}`. אין משימה: `204` + `Retry-After` — 60 כשאין עבודה; **5** כשנגמר תקציב הזמן של התפיסה (20 שניות) או כשכל המשימות שנבדקו דולגו (ייתכן שיש עוד); 300 כשהבדיקה כבויה או מושהית; עד 3600 כשחלון מנוחה מתחיל בתוך משך ה-lease | — |
+| `POST /api/worker/v1/corrections/{jobId}/heartbeat` (`X-Lease-Token`) | `200 {leaseExpiresAt, cancelled}` | `409 lease_invalid` / `lease_expired`, `404 not_found` |
+| `POST /api/worker/v1/corrections/{jobId}/release` (`X-Lease-Token`; גוף אופציונלי `{retry_after_seconds}`) | `200 {released, nextAttemptAt?}` | `400 bad_request`, `409 lease_invalid`, `404 not_found` |
+| `POST /api/worker/v1/corrections/{jobId}/result` (`X-Lease-Token`; גוף §3.2 עד 1MiB) | `200 {outcome}` (ובשליחה חוזרת גם `duplicate:true`); בהשהיה/כיבוי `200 {outcome:"cancelled", cancelled:true}` — התוצאה אינה מוחלת | `400 bad_request`, `413 payload_too_large`, `404 not_found`, `409 lease_invalid` / `lease_expired` / `stale_generation` / `result_conflict` / `apply_failed`, `422 invalid_result`, `503 apply_in_progress` (+`Retry-After: 30`) |
+
+בכל הנתיבים גם: `401 unauthorized` (Bearer חסר/שגוי), `403 agent_api_disabled` (האתר במצב `push`, או
+שהסוד/המזהה בשרת חסרים או לא תקינים), `403 wrong_agent` (`X-Agent-Id`), `500 internal_error`, ו-`503 shabbat`.
+
+**תפיסה.** מוסרת את הוותיקה שהגיע זמנה. דיווח שהמקור שלו לא אותר עובר לידני ו"כבר הוחל" מדויק נסגר (§3) —
+שניהם אינם נמסרים, והתפיסה ממשיכה למשימה הבאה; דיווח שההכנה שלו נכשלת בחריגה עובר לידני (`prepare_failed`)
+ואינו מפיל את התפיסה. לתפיסה תקציב זמן של 20 שניות, שנבדק לפני תפיסת המשימה הבאה, כך שאין משימה שנתפסה ולא
+נמסרה. **timeout מומלץ בלקוח לתפיסה: לפחות 120 שניות** (התקציב, ועוד איתור מקור אחד ב-GitHub). התפיסה גם יוצרת
+משימות מה-outbox, מריצה את המטאטא, ומריצה אצווה מלאה אחרי התשובה כשיש פרסום ממתין או כשלא רצה אצווה 10 דקות —
+ולכן אינה תלויה ב-cron.
+
+**lease.** 600 שניות מהתפיסה; כל דופק מאריך ל-600 שניות מרגע הדופק (מומלץ דופק כל ≤120 שניות). האסימון
+(`leaseToken`, 43 תווי base64url) נמסר פעם אחת, והאתר שומר רק sha256 שלו. תפיסה חדשה של אותה משימה מנפיקה
+אסימון חדש ומעלה את ה-fence — אסימון קודם כבר אינו מחזיק אותה.
+
+**`cancelled: true`** בדופק — המשימה כבר אינה של השירות: מתנדב לקח את הדיווח, הדיווח השתנה (`workflow_generation`),
+המשימה בוטלה או נסגרה, הבדיקה הושהתה/כובתה, עבר מועד המיצוי, או שחלון מנוחה יתחיל לפני שה-lease המוארך ייגמר
+(אז המשימה חוזרת לתור עד סוף החלון). יש להפסיק ולזרוק את העבודה. **ביטול מצד האתר משחרר מיד ובלי קנס:** המשימה
+אינה נספרת כפקיעה ואינה צורכת ניסיון (בהשהיה ובכיבוי — גם בלי דופק: התפיסה הבאה מרוקנת את כל המשימות הפתוחות).
+גם **תוצאה** שמגיעה בזמן השהיה/כיבוי אינה מוחלת (כולל `already_fixed`): התשובה `cancelled` כמו בדופק, המשימה
+משוחררת והדיווח עובר לידני (`skipped_service_disabled`).
+
+**`release`** — השירות מחזיר משימה לתור כשבניית db או OCR צריכים את המחשב: היא חוזרת ל-`pending` **בלי ניסיון
+ובלי פקיעה**, האסימון מבוטל, והיא לא תימסר שוב לפני `retry_after_seconds` (0–3600, ברירת מחדל 0). `released:false`
+כשהמשימה כבר אינה של השירות. מועד המיצוי ממשיך לחול.
+
+**`outcome` ב-200:**
+- `publish` — אישור מלא שמותר לפרסום; האתר מריץ אצווה מיד אחרי התשובה.
+- `manual` — לתור הידני: אישור טכני בלבד, `needs_review`, `conflict`, דחייה בלי הרשאת דחייה אוטומטית,
+  `reason_code` לא מוכר, `processing_status:"failed"` שאינו `service_capacity` (למשל `unsupported_capability`).
+- `close_already_fixed`, `close_rejected`.
+- `retry` — `processing_status:"failed"` + `reason_code:"service_capacity"`: המשימה חוזרת לתור **בלי לצרוך ניסיון**
+  (רק מועד המיצוי מגביל אותה); `retry_after_seconds` שבגוף מכובד עד 3600. לוותר על משאבים עדיף ב-`release`.
+
+**409** — לזרוק; אין טעם לשלוח שוב:
+- `lease_invalid` / `lease_expired` — ה-lease אינו בתוקף.
+- `stale_generation` — הדיווח השתנה מאז התפיסה, או `workflow_generation` ישן בגוף (במקרה השני הדיווח עובר לידני, כמו בדחיפה).
+- `result_conflict` — גוף אחר אחרי שכבר נקלטה תוצאה.
+- `apply_failed` — האתר נכשל ביישום (חריגה פנימית); הדיווח עבר לידני (`result_apply_failed`).
+החלטה תקינה שהגיעה בלי lease בתוקף נשמרת ב-`decisions` עם `stale:true` (פעם אחת לכל `decision_id`) ואינה מקדמת מצב.
+
+**422 `invalid_result`** — JSON תקין שמפר את §3.4; `reason` מפרט: מזהים לא תואמים (`response_mismatch`), digest
+שגוי או שלא ניתן לחשב (למשל surrogate בודד — `invalid_response`), החלטה לא מוכרת (`unknown_decision`), החלטה
+`completed` עם `reason_code:"unsupported_capability"`, או `processing_status:"pending"` (`pending_not_supported` — אין
+202 במשיכה). הדיווח עובר לידני, כמו תשובה פגומה בדחיפה.
+
+**שליחה חוזרת.** אותו גוף בדיוק (sha256 של הבתים) מקבל את אותה תשובה (כולל `reason` ב-422) בלי להחיל שוב; כשההחלה
+הראשונה עדיין רצה — `503 apply_in_progress`. לכן אחרי כשל רשת, 5xx או 503 שולחים שוב את **אותו** גוף, ב-backoff
+ובכיבוד `Retry-After`, ולא יותר מעד שה-lease פג (אחריו התשובה תהיה 409).
+
+**שדות נוספים** בגוף (למשל `evidence[]`) נסבלים ומתעלמים מהם בשלב זה. TODO (שלב D2): שמירת `evidence[]`
+ושל `candidates` מהשירות (היום הם מפוענחים ואינם נשמרים — גם בדחיפה).
+
+**מצב בצד האתר:**
+- **מונה פקיעות lease** לכל משימה: תפיסה מחדש של משימה שה-lease שלה פג נספרת. בפקיעה החמישית
+  (`AGENT_MAX_LEASE_EXPIRIES`) המשימה אינה נמסרת שוב, והדיווח עובר לידני עם `lease_expired_repeatedly`.
+  שחרור (`release`), ביטול מצד האתר וחלון מנוחה אינם נספרים.
+- **מועד מיצוי** (`deadlineAt`): `CORRECTIONS_VERIFY_DEADLINE_HOURS` (ברירת מחדל 24, טווח 1–168) שעות שנספרות **רק
+  מחוץ לחלונות המנוחה** — ולכן שבת ויו"ט אינם גורמים לדיווח לפוג.
+- **מטאטא** (באצווה ובתחילת כל תפיסה): משימה שעבר מועדה ואינה מוחזקת ב-lease בתוקף → ידני (`deadline_exhausted`).
+  תוצאה שמגיעה אחרי המועד, כשה-lease עוד בתוקף, מתקבלת ומוחלת.
+- **מתנדב שלוקח את הדיווח** באמצע הבדיקה פוסל אותה כמו בדחיפה: הדופק מחזיר `cancelled`, והתוצאה נענית ב-409.
 
 ---
 

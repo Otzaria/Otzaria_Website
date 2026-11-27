@@ -108,10 +108,16 @@ export function validateVerifyResponse(body, { request, currentGeneration, siteA
     if (typeof c.target.path !== 'string' || !Number.isSafeInteger(c.target.line_index) || c.target.line_index < 0) return bad('invalid_response');
     if (!SHA40.test(String(c.base.blob_sha)) || !SHA40.test(String(c.base.commit_sha))) return bad('invalid_response');
     if (typeof c.original_line !== 'string' || typeof c.new_line !== 'string') return bad('invalid_response');
-    const local = computeChangeDigest({
-      path: c.target.path, base_blob_sha: c.base.blob_sha, line_index: c.target.line_index,
-      original_line: c.original_line, new_line: c.new_line,
-    });
+    let local;
+    try {
+      local = computeChangeDigest({
+        path: c.target.path, base_blob_sha: c.base.blob_sha, line_index: c.target.line_index,
+        original_line: c.original_line, new_line: c.new_line,
+      });
+    } catch {
+      // OCJ-1 דוחה קלט פסול (למשל surrogate בודד, שמגיע כ-escape חוקי ב-JSON): תשובה פגומה, לא חריגה.
+      return bad('invalid_response');
+    }
     if (local !== c.change_digest) return bad('invalid_response');
     change = {
       changeId: c.change_id, changeDigest: c.change_digest, repo: typeof c.target.repo === 'string' ? c.target.repo : null,

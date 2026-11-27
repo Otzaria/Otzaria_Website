@@ -16,6 +16,8 @@ const EVENT_LABELS = {
   verify_retry_scheduled: 'נקבע ניסיון חוזר מול השירות',
   verify_pending: 'השירות עדיין מעבד',
   verify_job_superseded: 'בדיקה אוטומטית בוטלה',
+  verify_claimed: 'נלקח לבדיקה בשירות הבדיקה',
+  verify_released: 'שירות הבדיקה החזיר את הבדיקה לתור',
   service_decision: 'החלטת שירות הבדיקה',
   service_response_ignored: 'תשובת שירות מאוחרת (תיעוד בלבד)',
   resubmitted_to_service: 'נשלח מחדש לשירות',

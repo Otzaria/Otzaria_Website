@@ -9,6 +9,7 @@ import '../../../models/ChangePackage.js';
 import '../../../models/PublishAttempt.js';
 import '../../../models/WorkerHeartbeat.js';
 import '../../../models/CorrectionEvent.js';
+import '../../../models/CorrectionsAgentState.js';
 import '../../../models/SentEmailLog.js';
 import '../../../models/User.js';
 

@@ -4,9 +4,12 @@
  */
 import { DEFAULT_DIFF_CONTEXT_LINES } from './unified-diff.js';
 import { getGithubToken } from '../github/botToken.js';
+import { readAgentEnv } from './agent-auth.js';
 
 export const AUTHORITY = Object.freeze({ NONE: 'none', TECHNICAL_ONLY: 'technical_only', FULL: 'technical_and_content' });
 export const PUBLISH_MODES = Object.freeze(['disabled', 'pr', 'direct']);
+// push: האתר פונה לשירות (CORRECTIONS_VERIFY_URL). pull: השירות מושך עבודה מ-/api/worker/v1/corrections.
+export const VERIFY_TRANSPORTS = Object.freeze(['push', 'pull']);
 
 // ---- קבועי כוונון: אינם ניתנים להגדרה, שינוי דורש שינוי קוד ----
 export const SOURCE_REPO = 'Otzaria/otzaria-library';
@@ -39,6 +42,27 @@ export const MANUAL_CLAIM_MINUTES = 7 * 24 * 60;
 export const SOURCE_CACHE_BYTES = 64 * 1024 * 1024;
 export const SOURCE_HEAD_TTL_SECONDS = 30;
 export const DIFF_CONTEXT_LINES = DEFAULT_DIFF_CONTEXT_LINES;
+// ---- מצב משיכה (CONTRACT §3.7) ----
+// מועד המיצוי במשיכה, בשעות שאינן שבת/יו"ט (CORRECTIONS_VERIFY_DEADLINE_HOURS); מחוץ לטווח — נחתך ומדווח.
+export const VERIFY_DEADLINE_HOURS_DEFAULT = 24;
+export const VERIFY_DEADLINE_HOURS_MIN = 1;
+export const VERIFY_DEADLINE_HOURS_MAX = 168;
+// lease של משימה שנמסרה לשירות; הדופק מאריך אותו. אחרי AGENT_MAX_LEASE_EXPIRIES פקיעות → ידני.
+export const AGENT_LEASE_SECONDS = 600;
+export const AGENT_MAX_LEASE_EXPIRIES = 5;
+// Retry-After ב-204: אין עבודה / הבדיקה כבויה או מושהית.
+export const AGENT_IDLE_RETRY_SECONDS = 60;
+export const AGENT_DISABLED_RETRY_SECONDS = 300;
+// כמה משימות נבדקות בתפיסה אחת (משימה שהמקור שלה לא אותר עוברת לידני, ונבדקת הבאה).
+export const AGENT_CLAIM_SCAN = 10;
+// תקציב הזמן של תפיסה אחת, ו-Retry-After כשהוא נגמר או כשהסריקה דילגה על כל המשימות שבדקה.
+export const AGENT_CLAIM_BUDGET_MS = 20_000;
+export const AGENT_BUSY_RETRY_SECONDS = 5;
+// במשיכה התפיסות מריצות אצווה מלאה (פרסום, מעקב PR) כשלא רצה אחת זמן כזה — גם בלי cron.
+export const AGENT_BATCH_INTERVAL_SECONDS = 600;
+export const AGENT_MAX_RESULT_BYTES = 1024 * 1024;
+// דף הבריאות: שירות שלא פנה זמן רב כשיש משימות ממתינות.
+export const AGENT_STALE_SECONDS = 1_800;
 
 /** המתגים שמנוהלים במסך הניהול (SystemConfig) ולא ב-env. */
 export const RUNTIME_SWITCHES = Object.freeze(['intakeEnabled', 'publishMode', 'autoPublish', 'verifyPaused']);
@@ -82,10 +106,33 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
   }
   if (production && isMock) errors.push('CORRECTIONS_VERIFY_MOCK is forbidden in production');
 
+  // אופן ההעברה: push (ברירת המחדל, ההתנהגות הקיימת) או pull. ערך לא מוכר = השירות כבוי.
+  const rawTransport = String(env.CORRECTIONS_VERIFY_TRANSPORT || 'push').trim().toLowerCase();
+  const transportValid = VERIFY_TRANSPORTS.includes(rawTransport);
+  if (!transportValid) errors.push('CORRECTIONS_VERIFY_TRANSPORT invalid');
+  const transport = transportValid ? rawTransport : 'push';
+  const pull = transport === 'pull';
+  // במשיכה אין כתובת וסוד של שירות: נדרשים סוד ומזהה לסוכן, נפרדים מאלה של עובד ה-OCR.
+  const agent = readAgentEnv(env);
+  if (pull) errors.push(...agent.errors);
+  let deadlineHours = VERIFY_DEADLINE_HOURS_DEFAULT;
+  const rawDeadline = String(env.CORRECTIONS_VERIFY_DEADLINE_HOURS ?? '').trim();
+  if (rawDeadline) {
+    const hours = Number(rawDeadline);
+    if (!Number.isFinite(hours)) {
+      if (pull) errors.push('CORRECTIONS_VERIFY_DEADLINE_HOURS invalid');
+    } else {
+      deadlineHours = Math.min(VERIFY_DEADLINE_HOURS_MAX, Math.max(VERIFY_DEADLINE_HOURS_MIN, hours));
+      if (pull && deadlineHours !== hours) errors.push(`CORRECTIONS_VERIFY_DEADLINE_HOURS out of range (${VERIFY_DEADLINE_HOURS_MIN}-${VERIFY_DEADLINE_HOURS_MAX})`);
+    }
+  }
+
   if (!verifyRequested) verifyDisabledReason = 'service_disabled';
-  else if (!rawUrl) verifyDisabledReason = 'service_not_configured';
-  else if (!verifyUrl) verifyDisabledReason = 'service_misconfigured';
-  else if (!secret) verifyDisabledReason = 'service_secret_missing';
+  else if (!transportValid) verifyDisabledReason = 'service_misconfigured';
+  else if (pull && agent.problem) verifyDisabledReason = agent.problem;
+  else if (!pull && !rawUrl) verifyDisabledReason = 'service_not_configured';
+  else if (!pull && !verifyUrl) verifyDisabledReason = 'service_misconfigured';
+  else if (!pull && !secret) verifyDisabledReason = 'service_secret_missing';
   else if (production && isMock) verifyDisabledReason = 'mock_forbidden_in_production';
   else if (runtime?.verifyPaused) verifyDisabledReason = 'service_paused';
 
@@ -122,8 +169,14 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
     verify: {
       enabled: verifyDisabledReason === null,
       disabledReason: verifyDisabledReason,
+      transport,
       url: verifyUrl,
       secret,
+      // מצב משיכה: ה-API של הסוכן פתוח רק כש-transport=pull ו-agentProblem=null (agent-auth.js).
+      agentId: agent.agentId,
+      agentSecret: agent.secret,
+      agentProblem: agent.problem,
+      deadlineHours,
       isMock,
       authority: verifyDisabledReason === null ? authority : AUTHORITY.NONE,
       requestedScope,
@@ -156,6 +209,18 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
       leaseSeconds: JOB_LEASE_SECONDS,
       staleHeartbeatSeconds: HEARTBEAT_STALE_SECONDS,
     },
+    agent: {
+      leaseSeconds: AGENT_LEASE_SECONDS,
+      maxLeaseExpiries: AGENT_MAX_LEASE_EXPIRIES,
+      idleRetrySeconds: AGENT_IDLE_RETRY_SECONDS,
+      disabledRetrySeconds: AGENT_DISABLED_RETRY_SECONDS,
+      claimScan: AGENT_CLAIM_SCAN,
+      claimBudgetMs: AGENT_CLAIM_BUDGET_MS,
+      busyRetrySeconds: AGENT_BUSY_RETRY_SECONDS,
+      batchIntervalSeconds: AGENT_BATCH_INTERVAL_SECONDS,
+      maxResultBytes: AGENT_MAX_RESULT_BYTES,
+      staleSeconds: AGENT_STALE_SECONDS,
+    },
     manual: { claimMinutes: MANUAL_CLAIM_MINUTES },
     cacheBytes: SOURCE_CACHE_BYTES,
     // תצוגת דיווח בלבד; אישור ופרסום תמיד קוראים את ה-head העדכני.
@@ -177,6 +242,10 @@ export function describeConfig(cfg) {
     verify: {
       enabled: cfg.verify.enabled,
       disabledReason: cfg.verify.disabledReason,
+      transport: cfg.verify.transport,
+      agentId: cfg.verify.transport === 'pull' ? cfg.verify.agentId || null : null,
+      agentSecretConfigured: Boolean(cfg.verify.agentSecret),
+      deadlineHours: cfg.verify.transport === 'pull' ? cfg.verify.deadlineHours : null,
       urlHost: cfg.verify.url ? new URL(cfg.verify.url).host : null,
       secretConfigured: Boolean(cfg.verify.secret),
       isMock: cfg.verify.isMock,

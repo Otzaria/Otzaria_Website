@@ -6,6 +6,7 @@ import ErrorReport from '../../models/ErrorReport.js';
 import CorrectionJob from '../../models/CorrectionJob.js';
 import WorkerHeartbeat from '../../models/WorkerHeartbeat.js';
 import { describeConfig } from './config.js';
+import { computeAgentHealth } from './agent.js';
 
 const ageSec = (d, now) => (d ? Math.round((now.getTime() - new Date(d).getTime()) / 1000) : null);
 
@@ -44,12 +45,18 @@ export async function computeHealth({ config, now = new Date() }) {
   // דיווח בלי state אינו נראה בשום תור; התיקון היחיד הוא הרצת ה-migration.
   if (counts.legacyNotMigrated > 0) problems.push('legacy_not_migrated');
   if (config.errors.length) problems.push('config_errors');
+  // שירות הבדיקה: אופן ההעברה, "נראה לאחרונה" של הסוכן (משיכה) ומשימות הבדיקה לפי מצב.
+  const verifyAgent = await computeAgentHealth({ config, now });
+  if (verifyAgent.problem) problems.push(verifyAgent.problem);
+  // במשיכה התפיסות והתוצאות של הסוכן הן עבודת התור (וגם מריצות אצוות): סוכן פעיל אינו "worker לא רץ".
+  if (verifyAgent.workActive && problems.includes('worker_not_running')) problems.splice(problems.indexOf('worker_not_running'), 1);
   return {
     healthy: problems.length === 0,
     problems,
     heartbeat: beat ? { workerId: beat.workerId, lastBeatAt: beat.lastBeatAt, ageSeconds: heartbeatAge, stale, lastBatch: beat.lastBatch, lastError: beat.lastError } : null,
     oldestJob: oldest,
     counts,
+    verifyAgent,
     config: describeConfig(config),
   };
 }

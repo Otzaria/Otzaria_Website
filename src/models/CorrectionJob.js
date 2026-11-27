@@ -20,6 +20,13 @@ const CorrectionJobSchema = new mongoose.Schema({
   leaseOwner: { type: String, default: null },
   leaseExpiresAt: { type: Date, default: null },
   fence: { type: Number, default: 0 },
+  // מצב משיכה: hash של אסימון ה-lease שנמסר לשירות (האסימון עצמו אינו נשמר), מונה פקיעות lease,
+  // ו-sha256 של גוף התוצאה שנקלטה — שליחה חוזרת של אותו גוף מקבלת את אותה תשובה בלי להחיל שוב.
+  leaseTokenHash: { type: String, default: null },
+  leaseExpiries: { type: Number, default: 0 },
+  resultSha256: { type: String, default: null },
+  resultOutcome: { type: String, default: null },
+  resultReason: { type: String, default: null },
   lastErrorClass: { type: String, default: null },
   lastError: { type: String, default: null },
   outcome: { type: String, default: null },

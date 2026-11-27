@@ -3,8 +3,11 @@
  */
 import { isFinalState } from './states.js';
 
-const RETRY_EXHAUSTED = new Set(['retries_exhausted', 'deadline_exhausted']);
-const NOT_CONFIGURED = new Set(['service_disabled', 'service_not_configured', 'service_misconfigured', 'service_secret_missing', 'mock_forbidden_in_production', 'service_paused']);
+const RETRY_EXHAUSTED = new Set(['retries_exhausted', 'deadline_exhausted', 'lease_expired_repeatedly']);
+const NOT_CONFIGURED = new Set([
+  'service_disabled', 'service_not_configured', 'service_misconfigured', 'service_secret_missing', 'mock_forbidden_in_production', 'service_paused',
+  'agent_not_configured', 'agent_misconfigured',
+]);
 const CONFLICT = new Set(['source_changed', 'service_conflict', 'source_changed_after_approval', 'source_ambiguous']);
 
 /** @returns {Array<{id:string, text:string, tone:'info'|'warn'|'danger'|'success'}>} */

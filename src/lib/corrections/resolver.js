@@ -6,6 +6,8 @@ import { splitSourceLines } from './source-text.js';
 import { computeNewLine } from './payload.js';
 import { extractLineContext, DEFAULT_DIFF_CONTEXT_LINES } from './unified-diff.js';
 import { reachesOtzariaInbox } from './report-email.js';
+import { lineIndex as indexLines, locateEdit } from './locate-edit.js';
+import { rawPartHeld } from './absorption.js';
 
 const LIB_PREFIX = 'אוצריא/';
 const BOOKS_SEGMENT = 'ספרים/אוצריא';
@@ -150,7 +152,16 @@ export function matchLine(content, { originalLine, lineIndex, newLine, originalS
     const cur = texts[lineIndex];
     if (cur === orig) return { status: 'exact', lineIndex, currentLine: cur, match: 'exact', candidates: [], originalLine: orig, newLine: target };
     if (typeof target === 'string' && cur === target) {
-      return { status: 'already_applied', lineIndex, currentLine: cur, match: 'none', candidates: [], originalLine: orig, newLine: target };
+      // כמה פעמים כל שורה מופיעה בקובץ: שגיאה שזזה (שורות נוספו לפניה) או שורה שחוזרת (כותרת סעיף)
+      // נראות כאן בדיוק כמו תיקון שהוחל — הסגירה האוטומטית בודקת זאת (already-applied.js).
+      const occurrences = { original: texts.filter((t) => t === orig).length, proposed: texts.filter((t) => t === target).length };
+      // הפסקה המדווחת עצמה (locate-edit.js — הכלל של "נקלט"): זוהתה בקובץ, ובכל עותקיה במקום העריכה ההצעה ולא
+      // המקור. נבדק כאן כי רק כאן יש את הקובץ כולו; already-applied.js דורש fixed באזור שכולל את המקום המדווח.
+      const loc = locateEdit({ original: orig, proposed: target, current: indexLines(texts) });
+      // האיתור מנורמל (בלי תגיות) ומזהה את הפסקה בלבד. rawHeld — יש בקובץ עותק שבו המילה תוקנה ושינוי התגיות שאושר
+      // לא (absorption.js, אותו כלל כמו במפרסם וב"נקלט"): שורה זהה להצעה במקום המדווח אינה מכסה עליו.
+      const located = { status: loc.status, reason: loc.reason, lines: loc.lines, rawHeld: rawPartHeld({ originalLine: orig, newLine: target }, texts) };
+      return { status: 'already_applied', lineIndex, currentLine: cur, match: 'none', candidates: [], originalLine: orig, newLine: target, occurrences, located };
     }
   }
 
@@ -252,6 +263,8 @@ export async function resolveSource({ report, revision, gitSource, source, overr
     match: m.match,
     candidates: (m.candidates || []).map((c) => ({ path: file.path, ...c })),
     bomAdjusted: m.originalLine !== undefined && m.originalLine !== revision.originalLine,
+    occurrences: m.occurrences ?? null,
+    located: m.located ?? null,
     pathMatch,
     resolvedBy: override ? 'volunteer' : 'auto',
     context: USABLE_STATUSES.has(m.status) ? extractLineContext(splitSourceLines(file.content), m.lineIndex, contextLines) : null,

@@ -37,6 +37,7 @@ export function manualQueueSet(reason, now) {
     'manual.claimedAt': null,
     'manual.leaseExpiresAt': null,
     'dispatch.verify': false,
+    'verification.activeJob': null, // מסלול ידני = אין משימת בדיקה פעילה; החלטה מאוחרת אינה נכתבת
     status: 'pending',
     assignedTo: null,
   };
