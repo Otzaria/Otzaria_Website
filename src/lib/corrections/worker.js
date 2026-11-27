@@ -791,6 +791,8 @@ async function applyServiceDecision({ job, report, rev, source, value, authority
     'verification.completedAt': now, 'verification.activeJob': null, 'dispatch.verify': false,
     // ראיות השירות להצגה למתנדבים (נתונים בלבד, לא משפיעות על הניתוב)
     'verification.evidence': value.evidence ?? [],
+    // הסבר אוטומטי (volunteer_explanation): תצוגה בלבד; null מנקה הסבר של בדיקה קודמת
+    'verification.volunteerExplanation': value.volunteerExplanation ?? null,
   };
   let update;
   let changeId = null;

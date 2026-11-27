@@ -93,6 +93,25 @@ export function sanitizeEvidence(list) {
   return out;
 }
 
+export const MAX_EXPLANATION_TEXT = 600;
+export const MAX_EXPLANATION_MODEL = 80;
+export const MAX_EXPLANATION_NOTE = 200;
+// תווי בקרה (C0/C1), רווחים לא רגילים ותווי כיוון נסתרים — מוחלפים ברווח וגם מכווצים; אין טקסט שמגיע לתצוגה ככלי כיוון
+const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028-\u202E\u2060-\u2069\uFEFF]+/g;
+const cleanLine = (v, n) => (typeof v === 'string' ? v.replace(CONTROL_CHARS, ' ').replace(/ {2,}/g, ' ').trim().slice(0, n) : '');
+
+/**
+ * ההסבר האוטומטי למתנדב (`volunteer_explanation`, חוזה B §3.2) להצגה בלבד: רק `source === "llm"` וטקסט לא ריק; בלי תווי בקרה;
+ * text עד 600, model עד 80, note עד 200. כל דבר אחר → null (התעלמות, לעולם לא שגיאה). אינו משפיע על ההחלטה או הניתוב.
+ * @returns {{text:string, model:string|null, note:string|null}|null}
+ */
+export function sanitizeVolunteerExplanation(x) {
+  if (!isObj(x) || x.source !== 'llm') return null;
+  const text = cleanLine(x.text, MAX_EXPLANATION_TEXT);
+  if (!text) return null;
+  return { text, model: cleanLine(x.model, MAX_EXPLANATION_MODEL) || null, note: cleanLine(x.note, MAX_EXPLANATION_NOTE) || null };
+}
+
 function bad(reason) {
   return { ok: false, reason };
 }
@@ -182,6 +201,7 @@ export function validateVerifyResponse(body, { request, currentGeneration, siteA
       change,
       candidates,
       evidence: sanitizeEvidence(body.evidence),
+      volunteerExplanation: sanitizeVolunteerExplanation(body.volunteer_explanation),
       workflowGeneration: body.workflow_generation,
     },
   };
