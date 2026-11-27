@@ -154,7 +154,7 @@ async function placeImage(ctx, slug, rec, side) {
   return (await exists(imageFsPath(rel))) ? rel : null;
 }
 
-async function importPage(ctx, rec) {
+export async function importPage(ctx, rec) {
   const { manifest } = ctx;
   const scanPath = await placeImage(ctx, manifest.slug, rec, 'scan');
   if (!scanPath) throw new ImportError(`${rec.dafKey}: תמונת הסריקה חסרה בחבילה`);
@@ -176,6 +176,17 @@ async function importPage(ctx, rec) {
     const r = await TzuratPage.updateOne(key, { $setOnInsert: { ...key, ...fields, buildId: manifest.buildId } }, { upsert: true });
     if (r.upsertedCount) {
       ctx.summary.pages.created++;
+      return;
+    }
+  }
+  // חבילה ללא צילום באותה בנייה מעדכנת נתונים בלי למחוק את הצילום הקיים.
+  // התנאי במסד מונע שימור צילום של בנייה אחרת גם אם העמוד התעדכן אחרי findOne.
+  if (!rec.ours) {
+    const sameBuildFields = { ...fields, buildId: manifest.buildId };
+    delete sameBuildFields.ours;
+    const r = await TzuratPage.updateOne({ ...key, buildId: manifest.buildId }, { $set: sameBuildFields });
+    if (r.matchedCount) {
+      ctx.summary.pages.updated++;
       return;
     }
   }
