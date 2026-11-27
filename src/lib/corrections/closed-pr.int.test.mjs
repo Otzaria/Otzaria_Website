@@ -723,3 +723,24 @@ for (const [label, relocated] of Object.entries({
     assert.notEqual(r.publish.absorptionCheck?.outcome, 'absorbed');
   });
 }
+
+// הביקורת החמישית: PR שנסגר ונפתח מחדש. GitHub כבר מחזיר אותו פתוח, ובדיקת המקור הנוספת (סימון "הבסיס השתנה") נכשלת
+// ב-503 — הדיווח חוזר למעקב הרגיל ואינו עובר לידני בתום ההמתנה.
+test('הביקורת החמישית: PR שנפתח מחדש וקריאת המקור שאחריו נכשלת (503) → חוזר למעקב, לא לידני', async () => {
+  const id = await ingest('round5-real-reopen', 0);
+  const before = await approved(id);
+  const n = before.publish.prNumber;
+  gh.closePull(n);
+  await work(at(2));
+  assert.equal((await load(id)).publish.prClosedAt.getTime(), at(2).getTime());
+  gh.pulls[n - 1].state = 'open';
+  gh.hooks.beforeRequest = ({ method, path }) => (method === 'GET' && path.endsWith('/branches/main') ? json(503, { message: 'temporary source lookup failure' }) : null);
+  await work(at(2 + GRACE));
+  gh.hooks.beforeRequest = null;
+  assert.equal(gh.pulls[n - 1].state, 'open');
+  const r = await load(id);
+  // handoffReason נשאר כפי שהיה לפני הסגירה (service_disabled מהקליטה — השירות כבוי בבדיקות), בלי סיבת העברה חדשה
+  assert.deepEqual([r.state, r.publish.status, r.manual.status, r.manual.handoffReason, r.publish.prClosedAt], ['open', 'pr_opened', 'none', before.manual.handoffReason, null]);
+  assert.match(r.publish.lastError, /^pr_source_check_failed:503$/);
+});
+

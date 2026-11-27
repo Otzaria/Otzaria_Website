@@ -584,23 +584,30 @@ export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
         ctx.checker ??= createAbsorptionChecker({ config, deps });
         if (await processClosedPull(r, pr, ctx)) changed += 1;
       } else {
-        // PR שנפתח מחדש אחרי סגירה חוזר למעקב הרגיל (prClosedAt מתאפס).
-        const change = await ChangePackage.findOne({ changeId: r.publish.changeId }).lean();
-        if (change) {
-          const git = createGitSource({ client, ref: config.publish.branch, cache: getSharedSourceCache(config.cacheBytes) });
-          const head = await git.getHead();
-          const f = await git.getFile(change.path, head.commitSha);
-          const m = f ? matchLine(f.content, { originalLine: change.originalLine, lineIndex: change.lineIndex, newLine: change.newLine }) : null;
-          const conflict = !m || (m.status !== 'exact' && m.status !== 'already_applied') || m.lineIndex !== change.lineIndex;
-          await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.conflictReason': conflict ? 'base_changed_while_pr_open' : null, 'publish.prClosedAt': null, 'publish.updatedAt': now } });
-        } else {
-          await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.prClosedAt': null, 'publish.updatedAt': now } });
+        // PR פתוח (או שנפתח מחדש אחרי סגירה) → המעקב הרגיל (prClosedAt מתאפס). GitHub כבר אישר שה-PR פתוח, ולכן
+        // כשל בבדיקת המקור הנוספת (סימון "הבסיס השתנה") אינו מעביר לידני: הסימון הקודם נשאר והשגיאה נרשמת.
+        const set = { 'publish.prClosedAt': null, 'publish.updatedAt': now };
+        try {
+          const change = await ChangePackage.findOne({ changeId: r.publish.changeId }).lean();
+          if (change) {
+            const git = createGitSource({ client, ref: config.publish.branch, cache: getSharedSourceCache(config.cacheBytes) });
+            const head = await git.getHead();
+            const f = await git.getFile(change.path, head.commitSha);
+            const m = f ? matchLine(f.content, { originalLine: change.originalLine, lineIndex: change.lineIndex, newLine: change.newLine }) : null;
+            const conflict = !m || (m.status !== 'exact' && m.status !== 'already_applied') || m.lineIndex !== change.lineIndex;
+            set['publish.conflictReason'] = conflict ? 'base_changed_while_pr_open' : null;
+          }
+        } catch (err) {
+          set['publish.lastError'] = `pr_source_check_failed:${err.status || 'net'}`;
         }
+        // מותנה במצב שנקרא: אצווה ישנה אינה מאפסת את prClosedAt בדיווח שכבר עבר לידני או נסגר בינתיים.
+        await ErrorReport.updateOne({ _id: r._id, state: 'open', 'publish.status': 'pr_opened', 'publish.prClosedAt': r.publish.prClosedAt ?? null }, { $set: set });
       }
     } catch (err) {
       await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.lastError': `pr_track_failed:${err.status || 'net'}`, 'publish.updatedAt': now } });
-      // PR סגור (או ממתין) שבדיקתו נכשלת — גם שוב ושוב — יוצא מההמתנה בתום הזמן, בלי תלות ב-GitHub.
-      if ((pr?.state === 'closed' && !pr.merged) || r.publish.prClosedAt) {
+      // PR סגור (או ממתין) שבדיקתו נכשלת — גם שוב ושוב — יוצא מההמתנה בתום הזמן, בלי תלות ב-GitHub. PR ש-GitHub
+      // החזיר פתוח (או ממוזג) אינו נכנס לכאן גם כשהדיווח עדיין מסומן כממתין: הוא אינו סגור.
+      if (pr ? pr.state === 'closed' && !pr.merged : Boolean(r.publish.prClosedAt)) {
         const res = await onClosedPullError(r, { now, config, actor: WORKER_ACTOR }).catch(() => null);
         if (res === 'handoff' || (res === 'awaiting' && !r.publish.prClosedAt)) changed += 1;
       }
