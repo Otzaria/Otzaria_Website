@@ -68,6 +68,7 @@ scripts/*
 !scripts/corrections-worker.mjs
 !scripts/migrate-corrections.mjs
 !scripts/migrate-corrections-closed-prs.mjs
+!scripts/resubmit-corrections-backlog.mjs
 !scripts/migrate-ocr-local.mjs
 !scripts/ocr-local-fake-worker.mjs
 !scripts/mock-verify-server.mjs
