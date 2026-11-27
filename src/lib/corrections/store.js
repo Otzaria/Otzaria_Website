@@ -43,5 +43,22 @@ export function manualQueueSet(reason, now) {
   };
 }
 
+/**
+ * שליחה מחודשת לשירות הבדיקה: בקשה חדשה ב-outbox, יציאה מהתור הידני, וביטול אישור ופרסום שלא התחילו. עדכון אחד
+ * לפעולת המתנדב (resubmitToService ב-volunteer.js) ולסקריפט התור הישן (resubmit-backlog.js) — שניהם כותבים אותו מעבר.
+ */
+export function resubmitToServiceUpdate(config) {
+  return {
+    $set: {
+      'verification.status': 'queued', 'verification.requestId': newId('req'), 'verification.requestedScope': config.verify.requestedScope,
+      'verification.attempts': 0, 'verification.lastError': null, 'verification.lastErrorClass': null, 'verification.activeJob': null, 'dispatch.verify': true,
+      'manual.status': 'none', 'manual.assignee': null, 'manual.assigneeName': null, 'manual.leaseExpiresAt': null, 'manual.handoffReason': null,
+      'approval.authority': 'none', 'approval.scope': 'none', 'approval.changeId': null, 'publish.status': 'not_ready', 'dispatch.publish': false,
+      resolvedSource: null, status: 'pending', assignedTo: null,
+    },
+    $inc: { workflowGeneration: 1 },
+  };
+}
+
 /** מסנן לדיווחים פתוחים. דיווח ישן בלי state אינו נראה עד שמריצים migration (דף הבריאות מתריע). */
 export const OPEN_FILTER = { state: 'open' };

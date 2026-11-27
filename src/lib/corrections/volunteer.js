@@ -20,7 +20,7 @@ import { extractLineContext, proposedLineFor, clampContextLines } from './unifie
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
 import { escapeRegExp } from '../hebrewWordUtils.js';
-import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet } from './store.js';
+import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet, resubmitToServiceUpdate } from './store.js';
 import { cancelActiveJobs } from './worker.js';
 import { LIST_FILTERS, PUBLISHING_STATUSES } from './listFilters.js';
 import { parseListSort, sortSpec, libraryVersionKeyExpr, reportLibraryVersion, LIBRARY_VERSION_SORT_SCHEMA } from './listSort.js';
@@ -491,16 +491,7 @@ export async function resubmitToService({ user, id, generation, config, now = ne
   if (!rev || computeNewLine(rev) === null) return err(400, 'no_proposal');
   const updated = await ErrorReport.findOneAndUpdate(
     { _id: r._id, workflowGeneration: generation, state: 'open', 'manual.assignee': user._id, 'publish.status': { $nin: ['in_progress', 'unknown_needs_reconcile', 'pr_opened'] } },
-    {
-      $set: {
-        'verification.status': 'queued', 'verification.requestId': newId('req'), 'verification.requestedScope': config.verify.requestedScope,
-        'verification.attempts': 0, 'verification.lastError': null, 'verification.lastErrorClass': null, 'verification.activeJob': null, 'dispatch.verify': true,
-        'manual.status': 'none', 'manual.assignee': null, 'manual.assigneeName': null, 'manual.leaseExpiresAt': null, 'manual.handoffReason': null,
-        'approval.authority': 'none', 'approval.scope': 'none', 'approval.changeId': null, 'publish.status': 'not_ready', 'dispatch.publish': false,
-        resolvedSource: null, status: 'pending', assignedTo: null,
-      },
-      $inc: { workflowGeneration: 1 },
-    },
+    resubmitToServiceUpdate(config),
     { returnDocument: 'after' },
   ).lean();
   if (!updated) return err(409, 'stale_view');
