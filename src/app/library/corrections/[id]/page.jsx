@@ -11,8 +11,9 @@ import TextDiff from '@/components/corrections/TextDiff'
 import ChangeDiff from '@/components/corrections/ChangeDiff'
 import ReportActions from '@/components/corrections/ReportActions'
 import HistoryPanel from '@/components/corrections/HistoryPanel'
+import VerificationEvidence from '@/components/corrections/VerificationEvidence'
 import ReportNav from '@/components/corrections/ReportNav'
-import { committedNewLine } from '@/lib/corrections/unified-diff'
+import { proposedLineFor } from '@/lib/corrections/unified-diff'
 import { errorText } from '@/lib/corrections/error-text'
 import { githubFileUrl } from '@/lib/corrections/github-link'
 import { reportedLinePick } from '@/lib/corrections/reported-line'
@@ -135,11 +136,13 @@ function CorrectionReport({ id }) {
   const rev = report.proposals.find((p) => p.revision === report.currentRevision) || null
   const currentLine = source?.currentLine ?? null
   const targetLine = rev ? rev.newLine : null
+  // שורה שאותרה לפי התוכן בלי תגיות: התוצאה המיועדת היא השינוי על השורה שבקובץ (תגיות הקובץ נשמרות)
+  const resultLine = typeof source?.rebasedNewLine === 'string' ? source.rebasedNewLine : targetLine
   const sourceSubtitle = source ? `${SOURCE_STATUS[source.status] || source.status}${source.path ? ` · ${source.path}` : ''}${Number.isInteger(source.lineIndex) ? ` · שורה ${source.lineIndex + 1}` : ''}${source.commitSha ? ` · ${source.commitSha.slice(0, 8)}` : ''}` : sourceError ? `המקור אינו זמין כרגע (${sourceError})` : 'לא נטען'
   // הקשר מהקובץ רק כשהשורה אותרה בוודאות; אחרת — השורה מהדיווח בלבד, בלי מספרים מנוחשים.
   const fileDiff = source?.context && (source.status === 'exact' || source.status === 'relocated')
   const diff = fileDiff
-    ? { before: source.currentLine, after: committedNewLine(source, targetLine), context: source.context, lineIndex: source.lineIndex, path: source.path, contextNote: null }
+    ? { before: source.currentLine, after: proposedLineFor(source, targetLine), context: source.context, lineIndex: source.lineIndex, path: source.path, contextNote: null }
     : {
         before: rev?.originalLine ?? '', after: targetLine, context: null, lineIndex: null, path: null,
         contextNote: `הקשר מהקובץ אינו זמין (${source ? SOURCE_STATUS[source.status] || source.status : sourceError ? 'המקור אינו זמין כרגע' : 'המקור לא נטען'}) — מוצגת השורה כפי שנשלחה מהתוכנה.`,
@@ -208,6 +211,8 @@ function CorrectionReport({ id }) {
         </div>
       </section>
 
+      <VerificationEvidence verification={report.verification} source={source} />
+
       {rev && (
         <>
           <ChangeDiff
@@ -226,9 +231,9 @@ function CorrectionReport({ id }) {
                     text={currentLine}
                     empty="לא אותרה שורה מתאימה במקור"
                   />
-                  <LineBox title="התוצאה המיועדת" tone="target" subtitle={`גרסת הצעה ${rev.revision}`} text={targetLine} empty="לא הוצע נוסח (ללא הצעה)" />
+                  <LineBox title="התוצאה המיועדת" tone="target" subtitle={`גרסת הצעה ${rev.revision}`} text={resultLine} empty="לא הוצע נוסח (ללא הצעה)" />
                 </section>
-                {currentLine !== null && targetLine !== null && <TextDiff before={currentLine} after={targetLine} />}
+                {currentLine !== null && resultLine !== null && <TextDiff before={currentLine} after={resultLine} />}
                 {currentLine === null && targetLine !== null && (
                   <div>
                     <p className="text-xs text-on-surface/60 mb-2">השורה לא אותרה במקור העדכני; זו ההשוואה מול העותק שנשלח מהתוכנה.</p>

@@ -16,7 +16,7 @@ import { splitSourceLines } from './source-text.js';
 import { computeNewLine } from './payload.js';
 import { isExactlyApplied } from './already-applied.js';
 import { computeChangeDigest } from './ocj1.js';
-import { extractLineContext, committedNewLine, clampContextLines } from './unified-diff.js';
+import { extractLineContext, proposedLineFor, clampContextLines } from './unified-diff.js';
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
 import { escapeRegExp } from '../hebrewWordUtils.js';
@@ -283,7 +283,7 @@ async function buildChangeFromSource({ r, rev, config, deps, seenBlobSha }) {
   if (!USABLE_STATUSES.has(source.status)) return { error: err(409, 'source_not_resolved', { source }) };
   if (seenBlobSha && seenBlobSha !== source.blobSha) return { error: err(409, 'stale_view', { reason: 'source_changed', source }) };
   const originalLine = source.currentLine;
-  const target = committedNewLine(source, newLine);
+  const target = proposedLineFor(source, newLine);
   const change = {
     changeId: newId('chg'), repo: config.source.repo, path: source.path, baseCommitSha: source.commitSha, baseBlobSha: source.blobSha,
     lineIndex: source.lineIndex, originalLine, newLine: target,

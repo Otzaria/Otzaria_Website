@@ -5,7 +5,7 @@
 import { computeChangeDigest } from './ocj1.js';
 import { AUTHORITY } from './config.js';
 import { computeNewLine } from './payload.js';
-import { buildLineHunk, committedNewLine } from './unified-diff.js';
+import { buildLineHunk, proposedLineFor } from './unified-diff.js';
 
 export const API_VERSION = '1';
 export const DECISIONS = Object.freeze(['approved', 'rejected', 'needs_review', 'conflict', 'already_fixed']);
@@ -25,7 +25,7 @@ function requestDiff(source, revision) {
   if (!source || (source.status !== 'exact' && source.status !== 'relocated')) return null;
   return buildLineHunk({
     path: source.path, lineIndex: source.lineIndex, originalLine: source.currentLine,
-    newLine: committedNewLine(source, computeNewLine(revision)), context: source.context ?? null,
+    newLine: proposedLineFor(source, computeNewLine(revision)), context: source.context ?? null,
   });
 }
 
@@ -66,6 +66,31 @@ export function buildVerifyRequest({ report, revision, requestId, requestedScope
     change: change ? { change_id: change.changeId, change_digest: change.changeDigest } : null,
     diff: requestDiff(source, revision),
   };
+}
+
+export const MAX_EVIDENCE = 24;
+const EVIDENCE_SUPPORTS = new Set(['fix', 'original', 'neither']);
+const clipText = (v, n) => (typeof v === 'string' ? v.slice(0, n) : typeof v === 'number' && Number.isFinite(v) ? String(v).slice(0, n) : null);
+
+/**
+ * ראיות השירות (evidence[], חוזה B §3.2) להצגה למתנדבים בלבד: עד 24 פריטים, שדות טקסט חתוכים, supports רק מהערכים
+ * המוכרים וציון מספרי. נתונים בלבד — לעולם אינם משפיעים על ההחלטה או הניתוב. תשובה בלי evidence → מערך ריק.
+ */
+export function sanitizeEvidence(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const e of list) {
+    if (!isObj(e)) continue;
+    const item = {
+      kind: clipText(e.kind, 40), source: clipText(e.source, 300), edition: clipText(e.edition, 300), ref: clipText(e.ref, 300),
+      page: clipText(e.page, 40), snippet: clipText(e.snippet, 400), supports: EVIDENCE_SUPPORTS.has(e.supports) ? e.supports : null,
+      score: typeof e.score === 'number' && Number.isFinite(e.score) ? e.score : null, assetId: clipText(e.assetId, 128),
+    };
+    if (!item.kind && !item.snippet) continue;
+    out.push(item);
+    if (out.length >= MAX_EVIDENCE) break;
+  }
+  return out;
 }
 
 function bad(reason) {
@@ -156,6 +181,7 @@ export function validateVerifyResponse(body, { request, currentGeneration, siteA
       message: typeof body.message === 'string' ? body.message.slice(0, 2000) : '',
       change,
       candidates,
+      evidence: sanitizeEvidence(body.evidence),
       workflowGeneration: body.workflow_generation,
     },
   };
@@ -164,7 +190,7 @@ export function validateVerifyResponse(body, { request, currentGeneration, siteA
 /**
  * ניתוב לאחר תשובה תקינה (§3.5). פונקציה טהורה; ההחלה בפועל מותנית-גרסה במקום אחר.
  * ctx: { requestedScope, siteAuthority, autoPublish, autoRejectAllowed, sentNewLine, sentPath, sentLineIndex,
- *        manualActive, finalState, localAlreadyFixedVerified }
+ *        manualActive, finalState, localAlreadyFixedVerified, inexactMatch }
  * @returns {{route:'publish'|'manual'|'close_already_fixed'|'close_rejected', handoffReason?:string, serviceRevision?:boolean}}
  */
 export function routeVerifyDecision(value, ctx) {
@@ -179,13 +205,15 @@ export function routeVerifyDecision(value, ctx) {
         || c.baseBlobSha !== ctx.sentBlobSha || (c.repo !== null && c.repo !== ctx.sentRepo);
       if (differs) return { route: 'manual', handoffReason: 'service_modified_proposal', serviceRevision: c.newLine !== ctx.sentNewLine };
       if (value.approvalScope !== AUTHORITY.FULL) return { route: 'manual', handoffReason: 'needs_content_review' };
+      // שורה שאותרה לפי התוכן בלבד (תגיות שונות מהשורה שדווחה): האישור האוטומטי אינו חל — הראיות מגיעות למתנדב
+      if (ctx.inexactMatch === true) return { route: 'manual', handoffReason: 'inexact_match_review' };
       const allowed = ctx.siteAuthority === AUTHORITY.FULL && ctx.autoPublish === true && ctx.requestedScope === AUTHORITY.FULL;
       return allowed ? { route: 'publish' } : { route: 'manual', handoffReason: 'auto_publish_not_permitted' };
     }
     case 'already_fixed':
       return ctx.localAlreadyFixedVerified ? { route: 'close_already_fixed' } : { route: 'manual', handoffReason: 'already_fixed_unverified' };
     case 'rejected':
-      return ctx.autoRejectAllowed && ctx.siteAuthority !== AUTHORITY.NONE
+      return ctx.autoRejectAllowed && ctx.inexactMatch !== true && ctx.siteAuthority !== AUTHORITY.NONE
         ? { route: 'close_rejected' }
         : { route: 'manual', handoffReason: 'manual_reject_review' };
     case 'conflict':

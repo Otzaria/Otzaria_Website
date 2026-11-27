@@ -291,6 +291,8 @@ service_capacity         unsupported_capability   manual_required
     "blob_sha": "<40 hex>", "line_index": 2,
     "current_line": "…",                 // השורה כפי שהיא כעת במקור
     "match": "exact" | "unique_normalized" | "none" | "ambiguous"
+    // unique_normalized + status relocated: השורה אותרה לפי התוכן בלי תגיות (ראו "איתור מקור" ב-OPERATIONS) — current_line
+    // נושאת את התגיות שבקובץ, וה-diff נבנה ממנה ומהשינוי המוחל עליה (ולא מ-original_line של המשתמש)
   },
   "change": { "change_id": "chg_…", "change_digest": "<sha256>" } | null,  // אם כבר נבנתה חבילה
   "diff": {                              // null: אין הצעה (proposed_text=null), אין מקור שאותר בוודאות, או אין הקשר
@@ -482,8 +484,11 @@ rejected אחרת                            → manual queue (manual_reject_rev
 הראשונה עדיין רצה — `503 apply_in_progress`. לכן אחרי כשל רשת, 5xx או 503 שולחים שוב את **אותו** גוף, ב-backoff
 ובכיבוד `Retry-After`, ולא יותר מעד שה-lease פג (אחריו התשובה תהיה 409).
 
-**שדות נוספים** בגוף (למשל `evidence[]`) נסבלים ומתעלמים מהם בשלב זה. TODO (שלב D2): שמירת `evidence[]`
-ושל `candidates` מהשירות (היום הם מפוענחים ואינם נשמרים — גם בדחיפה).
+**ראיות (`evidence[]`).** אופציונלי בתשובת 200/202 וב-`result`: עד 24 פריטים `{kind, source, edition, ref, page, snippet,
+supports, score, assetId?}` (`supports`: `fix` / `original` / `neither`; `snippet` עד 400 תווים, שאר המחרוזות עד 300). האתר
+שומר אותם ב-`verification.evidence` (אחרי סניטציה — `sanitizeEvidence` ב-`verify-protocol.js`) ומציג למתנדבים בלבד בלוח
+"ממצאי שירות הבדיקה", יחד עם ההחלטה (`decision`), הסיבה (`reason_code`) והנימוק (`message`). הם נתונים בלבד: אינם משפיעים
+על האימות או הניתוב. שדות אחרים נסבלים ומתעלמים מהם. `candidates` מפוענחים ואינם נשמרים (בשלב הבא).
 
 **מצב בצד האתר:**
 - **מונה פקיעות lease** לכל משימה: תפיסה מחדש של משימה שה-lease שלה פג נספרת. בפקיעה החמישית

@@ -13,7 +13,7 @@ import User from '../../models/User.js';
 import { handleReportingErrorsPost } from './reporting-handler.js';
 import { getCorrectionsConfig } from './config.js';
 import { runWorkerBatch, claimJob, dispatchOutbox, processPublishJob } from './worker.js';
-import { claimReport } from './volunteer.js';
+import { claimReport, getReportDetail } from './volunteer.js';
 import { deriveLabels } from './labels.js';
 import { FakeGitHub } from './testing/fake-github.js';
 import { createMockVerifyFetch, buildMockDecision } from './testing/mock-verify.js';
@@ -547,4 +547,90 @@ test('[T23] "כבר הוחל" שנסגר אוטומטית — המדווח מק�
   await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch, sendThanksMail }, at(60));
   assert.equal((await load(r2._id)).state, 'closed_already_fixed');
   assert.equal(mails.length, 1);
+});
+
+// ---- איתור לפי שם ספר ובלי תגיות (PR D2) ----
+const NO_PATH = { file_path: '', source_hint: { source_folder: 'ToratEmetToOtzaria' } };
+const TAGGED = 'ויאמר אלהים <sup class="footnote-marker">1</sup> יהי אור ויהי אור בעולם הזה כולו';
+const TAGGED_FIXED = 'ויאמר אלקים <sup class="footnote-marker">1</sup> יהי אור ויהי אור בעולם הזה כולו';
+const IN_FILE_TAGS = (s) => s.replace(' class="footnote-marker"', '');
+
+test('[D2] דיווח בלי נתיב: הקובץ נמצא לפי שם הספר והבקשה נשלחת לשירות עם המקור שאותר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const r = await ingest('d2-nopath', cfg(), NO_PATH);
+  const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body) }));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  assert.equal(verify.calls.length, 1, 'נשלח לשירות ולא למתנדבים');
+  assert.equal(verify.calls[0].body.source.path, PATH);
+  assert.equal(verify.calls[0].body.source.match, 'exact');
+  const s = await load(r._id);
+  assert.equal(s.resolvedSource.pathMatch, 'name_fallback');
+});
+
+test('[D2] דיווח בלי נתיב והספר לא נמצא → ידני כמו קודם', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const r = await ingest('d2-nobook', cfg(), { ...NO_PATH, book_title: 'ספר שאינו קיים' });
+  const verify = createMockVerifyFetch(() => ({ status: 500 }));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  assert.equal(verify.calls.length, 0);
+  assert.equal((await load(r._id)).manual.handoffReason, 'source_not_found');
+});
+
+const taggedFile = (line) => fileOf(['<h1>ספר בדיקה</h1>', 'פסקה ראשונה בספר הבדיקה הזה', line, 'פסקה אחרונה בספר הבדיקה הזה']);
+
+test('[D2] תגיות שונות בקובץ: נשלח לשירות עם השורה שבקובץ; "approved" מלא אינו מתפרסם אוטומטית אלא מגיע למתנדב עם הראיות', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: taggedFile(IN_FILE_TAGS(TAGGED)) } });
+  const auto = cfg(FULL_AUTO_ENV, AUTO_RUNTIME);
+  const r = await ingest('d2-tags', auto, fullLineCorrection(2, TAGGED, TAGGED_FIXED));
+  const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content', newLine: IN_FILE_TAGS(TAGGED_FIXED) }) }));
+  await run(auto, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  assert.equal(verify.calls.length, 1);
+  assert.equal(verify.calls[0].body.source.current_line, IN_FILE_TAGS(TAGGED));
+  assert.equal(verify.calls[0].body.source.match, 'unique_normalized');
+  const s = await load(r._id);
+  assert.equal(s.state, 'open');
+  assert.equal(s.publish.status === 'ready', false);
+  assert.equal(s.manual.status, 'queued');
+  assert.equal(s.manual.handoffReason, 'inexact_match_review');
+  assert.equal(s.verification.decision, 'approved', 'ההחלטה והסיבה נשמרות להצגה למתנדב');
+});
+
+test('[D2] תגיות שונות והמקור כבר תוקן: נסגר "כבר תוקן" רק כשהעריכה במקומה; אחרת ידני', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: taggedFile(IN_FILE_TAGS(TAGGED_FIXED)) } });
+  const r = await ingest('d2-fixed', cfg(), fullLineCorrection(2, TAGGED, TAGGED_FIXED));
+  const verify = createMockVerifyFetch(() => ({ status: 500 }));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  assert.equal(verify.calls.length, 0);
+  const s = await load(r._id);
+  assert.equal(s.state, 'closed_already_fixed');
+  assert.equal(s.closeReason, 'source_already_applied');
+
+  await db.reset();
+  // המקור עדיין בקובץ במקום אחר → לא נסגר
+  const gh2 = new FakeGitHub({ repo: REPO, files: { [PATH]: fileOf(['<h1>ספר בדיקה</h1>', IN_FILE_TAGS(TAGGED_FIXED), 'פסקה באמצע הספר הזה', IN_FILE_TAGS(TAGGED)]) } });
+  const r2 = await ingest('d2-fixed-elsewhere', cfg(), fullLineCorrection(1, TAGGED, TAGGED_FIXED));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh2.fetch }, T0);
+  assert.equal((await load(r2._id)).state, 'open');
+});
+
+test('[D2] ראיות השירות נשמרות בדיווח ומגיעות למתנדב בפרטי הדיווח (החלטה, נימוק וראיות)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const r = await ingest('d2-evidence', cfg());
+  const evidence = [{ kind: 'parallel_text', source: 'בר-אילן', ref: 'בראשית א', snippet: 'בראשית ברא אלקים', supports: 'fix', score: 0.93 }, { kind: 'lexical', snippet: 'המילה במילון', supports: 'neither' }];
+  const verify = createMockVerifyFetch((call) => ({ status: 200, body: { ...buildMockDecision(call.body, { decision: 'needs_review', reasonCode: 'content_doubtful', message: 'עד אחד בלבד' }), evidence } }));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  const s = await load(r._id);
+  assert.equal(s.verification.decision, 'needs_review');
+  assert.equal(s.verification.message, 'עד אחד בלבד');
+  assert.equal(s.verification.evidence.length, 2);
+  assert.deepEqual([s.verification.evidence[0].kind, s.verification.evidence[0].supports, s.verification.evidence[0].score], ['parallel_text', 'fix', 0.93]);
+  const admin = await User.create({ name: 'מתנדב3', email: 'v3@example.org', password: 'x', isCorrectionsVolunteer: true });
+  const detail = await getReportDetail({ user: admin, id: String(r._id), config: cfg(), deps: { githubFetch: gh.fetch } });
+    assert.equal(detail.body.report.verification.evidence[1].kind, 'lexical');
+  assert.equal(detail.body.report.verification.reasonCode, 'content_doubtful');
 });

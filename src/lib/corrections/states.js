@@ -33,6 +33,7 @@ export const HANDOFF_REASON_LABELS = {
   needs_review: 'השירות ביקש הכרעה אנושית',
   service_conflict: 'השירות דיווח על התנגשות',
   service_modified_proposal: 'השירות שינה את ההצעה',
+  inexact_match_review: 'השורה אותרה לפי התוכן בלי תגיות — נדרש אישור אנושי',
   auto_publish_not_permitted: 'פרסום אוטומטי אינו מותר',
   already_fixed_unverified: 'השירות טען "כבר תוקן" ולא אומת',
   manual_reject_review: 'השירות המליץ לדחות',
@@ -62,3 +63,41 @@ export const HANDOFF_REASON_LABELS = {
   prepare_failed: 'תקלה פנימית בהכנת הבדיקה האוטומטית',
   result_apply_failed: 'תקלה פנימית ביישום תשובת שירות הבדיקה',
 };
+
+// תצוגת הראיות של שירות הבדיקה למתנדבים (VerificationEvidence.jsx). קוד שאינו כאן מוצג כמו שהוא.
+export const VERIFY_DECISION_LABELS = {
+  approved: 'השירות המליץ לאשר',
+  rejected: 'השירות המליץ לדחות',
+  needs_review: 'השירות ביקש הכרעה אנושית',
+  conflict: 'השירות דיווח על התנגשות',
+  already_fixed: 'השירות טען שכבר תוקן',
+}
+export const VERIFY_REASON_LABELS = {
+  ok: 'תקין',
+  source_not_found: 'המקור לא אותר',
+  source_ambiguous: 'המקור עמום',
+  selection_not_found: 'הקטע המסומן לא נמצא',
+  selection_ambiguous: 'הקטע המסומן עמום',
+  source_changed: 'המקור השתנה',
+  proposal_identical: 'ההצעה זהה למקור',
+  proposal_invalid: 'ההצעה אינה תקינה',
+  content_doubtful: 'התוכן מוטל בספק',
+  content_wrong: 'התוכן שגוי',
+  structural_change: 'שינוי מבני',
+  out_of_scope: 'מחוץ לתחום הבדיקה',
+  service_capacity: 'השירות עמוס',
+  manual_required: 'נדרשת בדיקה ידנית',
+}
+export const EVIDENCE_KIND_LABELS = {
+  scan_ocr: 'סריקה (זיהוי תווים)',
+  scan_textlayer: 'שכבת טקסט של הסריקה',
+  parallel_text: 'טקסט מקביל',
+  site_page: 'עמוד באתר העריכה',
+  lexical: 'מילון ולשון',
+  llm: 'מודל שפה',
+}
+export const EVIDENCE_SUPPORTS_LABELS = {
+  fix: 'תומך בתיקון',
+  original: 'תומך בנוסח הקיים',
+  neither: 'אינו מכריע',
+}

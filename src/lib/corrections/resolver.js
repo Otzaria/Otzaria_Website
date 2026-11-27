@@ -6,8 +6,10 @@ import { splitSourceLines } from './source-text.js';
 import { computeNewLine } from './payload.js';
 import { extractLineContext, DEFAULT_DIFF_CONTEXT_LINES } from './unified-diff.js';
 import { reachesOtzariaInbox } from './report-email.js';
-import { lineIndex as indexLines, locateEdit } from './locate-edit.js';
-import { rawPartHeld } from './absorption.js';
+import { lineIndex as indexLines, locateEdit, canon, rawCanon, LOCATE } from './locate-edit.js';
+import { rawPartHeld, editState, lineEdit } from './absorption.js';
+import { rebaseLineChange } from './rebase-change.js';
+import { isDistinctiveLine } from './already-applied.js';
 
 const LIB_PREFIX = 'אוצריא/';
 const BOOKS_SEGMENT = 'ספרים/אוצריא';
@@ -124,6 +126,36 @@ export async function findByFileName(gitSource, { roots, name }, commitSha) {
   return exact.length ? exact : loose;
 }
 
+/**
+ * שמות קובץ לחיפוש כשאין נתיב מהימן: שם הקובץ מהנתיב שנשלח (קובץ שהועבר), ושם הספר (נתיב חסר, או קובץ ששונה שמו).
+ * null כשאין שורשי חיפוש תקינים לתיקיית המקור, או שגיט-המקור אינו תומך ברשימת קבצים.
+ */
+function nameFallback(report, hints, gitSource) {
+  if (typeof gitSource.listTxtFilesUnder !== 'function') return null;
+  const roots = rootsForFolder(hints.sourceFolder);
+  if (!roots) return null;
+  const names = [];
+  const segs = safeSegments(hints.libraryRelativePath);
+  if (segs && hints.libraryRelativePath.toLowerCase().endsWith('.txt')) names.push(segs[segs.length - 1]);
+  const title = typeof report.bookTitle === 'string' ? report.bookTitle.trim() : '';
+  if (title && title.length <= 200 && !/[\\/\u0000-\u001f]/.test(title)) names.push(`${title}.txt`);
+  return names.length ? { roots, names: [...new Set(names)] } : null;
+}
+
+/**
+ * הקובץ היחיד שנקרא בשם (לפי הסדר: שם הקובץ מהנתיב, ואז שם הספר). שם שנמצאו לו כמה קבצים (גם אחרי נרמול) —
+ * עמום: null, והדיווח נשאר ידני כמו קודם. שם שלא נמצא — עוברים לשם הבא.
+ */
+async function findByBookName(gitSource, fb, commitSha) {
+  if (!fb) return null;
+  for (const name of fb.names) {
+    const hits = await findByFileName(gitSource, { roots: fb.roots, name }, commitSha);
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) return null;
+  }
+  return null;
+}
+
 const normalizeLoose =(s) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
 
 function findCandidates(lines, original, selection, limit = 5) {
@@ -185,6 +217,57 @@ export function matchLine(content, { originalLine, lineIndex, newLine, originalS
   };
 }
 
+const BOM_CHAR = '﻿';
+const countLines = (texts, line) => texts.reduce((n, t) => (t === line ? n + 1 : n), 0);
+
+/**
+ * התאמה שמתעלמת מתגיות ומתכונות תגיות (class="footnote-marker" ועוד), כשההתאמה המדויקת נכשלה. ספק = null (ידני), וכל
+ * תוצאה מותנית בייחוד: שורה אחת בלבד בקובץ שהמקור המנורמל שלה זהה, ושורת הדיווח ארוכה מספיק (לא כותרת).
+ * - relocated: המקור לא תוקן, והשורה שאותרה נושאת תגיות אחרות. השינוי מוחל על השורה *הנוכחית* (rebaseLineChange, בלי
+ *   התנגשויות) ולא על שורת המשתמש, כדי לא לדרוס את שינוי התגיות שנעשה בקובץ; rebasedNewLine היא השורה שתיכתב.
+ * - already_applied: ההצעה כבר בקובץ, אך עם תגיות אחרות. נסגר רק לפי אותם כללים של already-applied.js: האיתור קובע
+ *   fixed, העריכה (editState) מוחלת, ושינוי התגיות של ההצעה כולו במקומו (rawPartHeld). בלי editApplied — לא נסגר.
+ * @returns {object|null} תוצאה בצורת matchLine, או null
+ */
+export function matchLineLoose(content, { originalLine, newLine }) {
+  if (typeof originalLine !== 'string' || typeof newLine !== 'string') return null;
+  const { bom, lines } = splitSourceLines(content);
+  const texts = lines.map((l) => l.text);
+  const orig = bom && originalLine.startsWith(BOM_CHAR) ? originalLine.slice(1) : originalLine;
+  const target = bom && newLine.startsWith(BOM_CHAR) ? newLine.slice(1) : newLine;
+  if (!isDistinctiveLine(orig) || target === orig || /[\r\n]/.test(target)) return null;
+  const index = indexLines(texts);
+  const loc = locateEdit({ original: orig, proposed: target, current: index });
+  const base = { originalLine: orig, newLine: target, candidates: [], match: 'unique_normalized', matchBasis: 'tags' };
+
+  if (loc.status === LOCATE.FIXED) {
+    const [from, to] = loc.lines ?? [null, null];
+    if (from === null || from !== to) return null;
+    const cur = texts[from];
+    // שורה זהה להצעה (גם אם זזה) היא עניינו של הכלל המדויק (matchLine/isExactlyApplied) — כאן רק שורה בתגיות אחרות.
+    // העריכה נבדקת בנרמול בלי תגיות (כמו האיתור); שינוי התגיות של ההצעה עצמה נבדק בנפרד (rawPartHeld).
+    if (cur === target || editState(canon(cur), lineEdit(canon(orig), canon(target))) !== 'applied' || rawPartHeld({ originalLine: orig, newLine: target }, texts)) return null;
+    return {
+      ...base, status: 'already_applied', lineIndex: from, currentLine: cur, match: 'none', editApplied: true,
+      occurrences: { original: countLines(texts, orig), proposed: countLines(texts, target) },
+      located: { status: loc.status, reason: loc.reason, lines: loc.lines, rawHeld: false },
+    };
+  }
+  if (loc.status !== LOCATE.NOT_FIXED) return null;
+  const hits = index.byCanon.get(canon(orig)) ?? [];
+  if (hits.length !== 1) return null;
+  const at = hits[0];
+  const cur = texts[at];
+  if (loc.lines?.[0] !== at || loc.lines?.[1] !== at || cur === orig || /[\r\n]/.test(cur)) return null;
+  // הבדל ברווחים בלבד אינו שינוי תגיות — נשאר ידני כמו קודם (matchLine: unique_normalized)
+  if (rawCanon(cur) === rawCanon(orig)) return null;
+  const merged = rebaseLineChange(orig, target, cur);
+  if (!merged.clean || merged.conflicts !== 0 || merged.applied < 1 || merged.line === cur || /[\r\n]/.test(merged.line)) return null;
+  // הטקסט (בלי תגיות) של השורה אחרי השינוי חייב להיות בדיוק מה שהמשתמש הציע
+  if (canon(merged.line) !== canon(target)) return null;
+  return { ...base, status: 'relocated', lineIndex: at, currentLine: cur, rebasedNewLine: merged.line };
+}
+
 /** סטטוסים שמהם מותר לבנות חבילת שינוי. */
 export const USABLE_STATUSES = new Set(['exact', 'relocated']);
 
@@ -196,8 +279,9 @@ export const USABLE_STATUSES = new Set(['exact', 'relocated']);
  * @param {{repo:string, ref:string}} args.source
  * @param {{path:string, lineIndex:number}} [args.override]  בחירה ידנית של מתנדב
  * @param {number} [args.contextLines]  שורות הקשר ל-diff (רק כשהשורה אותרה בוודאות)
+ * @param {boolean} [args.nameFallback]  גיבוי לפי שם הקובץ/הספר כשאין נתיב או שהתיישן (ברירת מחדל: כן)
  */
-export async function resolveSource({ report, revision, gitSource, source, override = null, contextLines = DEFAULT_DIFF_CONTEXT_LINES }) {
+export async function resolveSource({ report, revision, gitSource, source, override = null, contextLines = DEFAULT_DIFF_CONTEXT_LINES, nameFallback: useNameFallback = true }) {
   const base = { repo: source.repo, ref: source.ref, commitSha: null, path: null, blobSha: null, lineIndex: null, currentLine: null, match: 'none', candidates: [] };
   const folder = report.sourceHint?.sourceFolder || report.sourceFolder;
   if (!revision || typeof revision.originalLine !== 'string') return { ...base, status: 'no_proposal', reason: 'free_text' };
@@ -211,7 +295,7 @@ export async function resolveSource({ report, revision, gitSource, source, overr
   } else {
     paths = candidatePaths(hints);
     if (!paths.length && typeof gitSource.listTxtFilesUnder === 'function') byName = bareFileHint(hints);
-    if (!paths.length && !byName) return { ...base, status: 'not_found', reason: 'no_candidate_path' };
+    if (!paths.length && !byName && !(useNameFallback && nameFallback(report, hints, gitSource))) return { ...base, status: 'not_found', reason: 'no_candidate_path' };
   }
 
   const head = await gitSource.getHead();
@@ -240,18 +324,42 @@ export async function resolveSource({ report, revision, gitSource, source, overr
     }
     if (found.length) pathMatch = 'normalized';
   }
-  if (!found.length) return { ...withHead, status: 'not_found', reason: 'file_missing_in_repo', candidates: paths.map((p) => ({ path: p })) };
+  // אין נתיב, או שהנתיב התיישן (הקובץ הועבר קטגוריה / שונה שמו): לפי שם הקובץ מהנתיב ולפי שם הספר, רק כשהתוצאה יחידה
+  const fb = !found.length && !override && useNameFallback ? await findByBookName(gitSource, nameFallback(report, hints, gitSource), head.commitSha) : null;
+  if (fb) {
+    const f = await gitSource.getFile(fb, head.commitSha);
+    if (f) {
+      found.push({ path: fb, ...f });
+      pathMatch = 'name_fallback';
+    }
+  }
+  if (!found.length) {
+    return paths.length || byName
+      ? { ...withHead, status: 'not_found', reason: 'file_missing_in_repo', candidates: paths.map((p) => ({ path: p })) }
+      : { ...withHead, status: 'not_found', reason: 'no_candidate_path' };
+  }
   if (found.length > 1) return { ...withHead, status: 'ambiguous', reason: 'source_ambiguous', match: 'ambiguous', candidates: found.map((f) => ({ path: f.path })) };
 
   const file = found[0];
   if (file.lossy) return { ...withHead, path: file.path, blobSha: file.blobSha, status: 'manual_only', reason: 'non_utf8_source' };
   const lineIndex = override ? override.lineIndex : report.location?.lineIndex ?? null;
-  const m = matchLine(file.content, {
+  const newLine = computeNewLine(revision) ?? revision.newLine ?? null;
+  let m = matchLine(file.content, {
     originalLine: override?.expectedLine ?? revision.originalLine,
     lineIndex,
-    newLine: computeNewLine(revision) ?? revision.newLine ?? null,
+    newLine,
     originalSelection: revision.originalSelection,
   });
+  // קובץ שאותר לפי שם (לא לפי נתיב שנשלח): גם התאמה מדויקת חייבת להיות המופע היחיד של השורה בקובץ
+  if (pathMatch === 'name_fallback' && USABLE_STATUSES.has(m.status) && countLines(splitSourceLines(file.content).lines.map((l) => l.text), m.originalLine ?? revision.originalLine) > 1) {
+    m = { ...m, status: 'ambiguous', lineIndex: null, currentLine: null, match: 'ambiguous', candidates: [] };
+  }
+  // התאמה מדויקת נכשלה: התאמה שמתעלמת מתגיות (רק בייחוד מלא; ללא override — מתנדב שבחר שורה אחראי עליה)
+  let loose = null;
+  if (!override && (m.status === 'source_changed' || m.status === 'selection_not_found')) {
+    loose = matchLineLoose(file.content, { originalLine: revision.originalLine, newLine });
+    if (loose) m = loose;
+  }
   return {
     ...withHead,
     path: file.path,
@@ -266,6 +374,9 @@ export async function resolveSource({ report, revision, gitSource, source, overr
     occurrences: m.occurrences ?? null,
     located: m.located ?? null,
     pathMatch,
+    matchBasis: m.matchBasis ?? null,
+    rebasedNewLine: m.rebasedNewLine ?? null,
+    editApplied: m.editApplied ?? false,
     resolvedBy: override ? 'volunteer' : 'auto',
     context: USABLE_STATUSES.has(m.status) ? extractLineContext(splitSourceLines(file.content), m.lineIndex, contextLines) : null,
   };

@@ -42,6 +42,14 @@ export function committedNewLine(source, newLine) {
   return source?.bomAdjusted && newLine.startsWith('﻿') ? newLine.slice(1) : newLine;
 }
 
+/**
+ * השורה שתיכתב בפועל כשהמקור אותר: שורה שאותרה לפי התוכן בלי תגיות (rebasedNewLine, resolver.js) נושאת את השינוי על השורה
+ * שבקובץ — כדי לא לדרוס את התגיות שבקובץ בתגיות שבדיווח; אחרת committedNewLine של ההצעה.
+ */
+export function proposedLineFor(source, newLine) {
+  return typeof source?.rebasedNewLine === 'string' ? source.rebasedNewLine : committedNewLine(source, newLine);
+}
+
 const range = (start, count) => (count === 1 ? `${start}` : `${start},${count}`);
 
 /**

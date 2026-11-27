@@ -84,7 +84,7 @@ export async function closedPrChange(report, { gitSource, head, source, packages
   if (!rev || newLine === null) return { error: 'no_proposal' };
   const override = rev.targetPath ? { path: rev.targetPath, lineIndex: rev.targetLineIndex, expectedLine: rev.originalLine } : null;
   const pinned = { ...gitSource, getHead: async () => head };
-  const found = await resolveSource({ report, revision: rev, gitSource: pinned, source, override });
+  const found = await resolveSource({ report, revision: rev, gitSource: pinned, source, override, nameFallback: false });
   if (!found.path) return { error: found.reason || found.status };
   return {
     path: found.path, lineIndex: override ? override.lineIndex : report.location?.lineIndex ?? null,
