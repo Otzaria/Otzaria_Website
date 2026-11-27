@@ -36,10 +36,10 @@ const nextPaint = () => new Promise((resolve) => {
  * קובץ שאי אפשר לקרוא בדפדפן, או מוצפן — רק העלאה שלמה (השדות מושבתים, והשורה אומרת למה).
  *
  * הבדיקות (שם, PDF, גודל, טווח) — לפני ההעלאה. אחר כך: "מכין את העמודים…" (בטווח), פס התקדמות, ואחריו
- * "מחלק לעמודים…" (ההמרה בשרת לוקחת זמן); אי אפשר לסגור באמצע. הצלחה — onAdded(שם) והחלון נסגר;
+ * "מחלק לעמודים…" (ההמרה בשרת לוקחת זמן); אי אפשר לסגור באמצע. הצלחה — onAdded(שם, notification) והחלון נסגר;
  * כשל — בתוך החלון. "שלח הודעה" לא זמין לספר מוסתר (אין מה להודיע), והשורה אומרת למה.
  *
- * @param {{ categoryOptions: { value: string, label: string, color?: string }[], onAdded: (name: string) => void, onClose: () => void }} props
+ * @param {{ categoryOptions: { value: string, label: string, color?: string }[], onAdded: (name: string, notification?: { status: string, total: number }) => void, onClose: () => void }} props
  */
 export default function AddBookDialog({ categoryOptions, onAdded, onClose }) {
   const [file, setFile] = useState(null)
@@ -122,8 +122,8 @@ export default function AddBookDialog({ categoryOptions, onAdded, onClose }) {
     setProgress(0)
     setPhase('uploading')
     try {
-      await uploadBook(form, { onProgress: setProgress })
-      onAdded(name.trim())
+      const data = await uploadBook(form, { onProgress: setProgress })
+      onAdded(name.trim(), data?.notification)
       onClose()
     } catch (e) {
       fail(e?.message || 'לא הצלחנו להוסיף את הספר. נסה שוב.')

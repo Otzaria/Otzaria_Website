@@ -1,9 +1,8 @@
 import { encryptToken } from '@/app/api/user/unsubscribe/route'; 
 import User from '@/models/User'; 
-import MailingList from '@/models/MailingList';
 import dbConnect from '@/lib/db';
 import { formatPluginStatus } from '@/lib/pluginSubmission';
-import { createSmtpTransport, createCustomSmtpTransport } from '@/lib/smtp-transport';
+import { createSmtpTransport } from '@/lib/smtp-transport';
 import {
     cleanBookName,
     escapeHtml,
@@ -248,94 +247,64 @@ export async function sendPluginUploadNotification(pluginData) {
     }
 }
 
-export async function sendBookNotification(bookName, bookSlug) {
-    try {
-        await dbConnect();
-        
-        const list = await MailingList.findOne({ listName: 'new_books_subscribers' });
+// מייל "ספר חדש בספרייה" לנמען אחד — עם קישור הסרה אישי. השליחה עצמה במנות, מתור ב-DB:
+// src/lib/book-notifications/worker.js (issue #306 — שליחה של מאות מיילים בתוך הבקשה נתקעה
+// והספק חסם את השליחה).
+export function buildBookNotificationMail({ email, bookName, bookSlug }) {
+    const secureToken = encryptToken(email);
 
-        if (!list || !list.emails || list.emails.length === 0) {
-            return { sent: false, reason: 'empty_list' };
-        }
+    const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}&action=new_books`;
 
-        const validUsers = await User.find({
-            email: { $in: list.emails },
-            isVerified: true 
-        }).select('email');
+    const safeSlug = bookSlug ? encodeURIComponent(bookSlug) : '';
+    const bookLink = safeSlug
+        ? `${process.env.NEXTAUTH_URL}/library/books/${safeSlug}`
+        : `${process.env.NEXTAUTH_URL}/library`;
+    const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
+    const safeName = escapeHtml(bookName);
 
-        if (validUsers.length === 0) {
-            return { sent: false, error: 'No valid verified users found' };
-        }
-
-        const validEmails = validUsers.map(u => u.email);
-
-        // transporter משותף — TLS מאומת + timeouts מה-lib המשותף
-        const transporter = createCustomSmtpTransport('mailing_list');
-
-        const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
-
-        const sendPromises = validEmails.map(async (email) => {
-            const secureToken = encryptToken(email);
-            
-            const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}&action=new_books`;
-            
-            const safeSlug = bookSlug ? encodeURIComponent(bookSlug) : ''; 
-            const bookLink = safeSlug 
-                ? `${process.env.NEXTAUTH_URL}/library/books/${safeSlug}`
-                : `${process.env.NEXTAUTH_URL}/library`;
-
-            const emailHtml = `
-            <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
-                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
-                    <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
-                        <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
-                        <h2 style="color: #d4a373; font-size: 20px; margin: 5px 0 0 0; font-weight: bold;">ספריית אוצריא</h2>
-                    </div>
-                    <div style="padding: 30px; color: #333333;">
-                        <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">ספר חדש עלה לספריה!</h1>
-                        <p style="font-size: 18px; line-height: 1.6;">
-                            אנו שמחים לעדכן כי הספר 
-                            <strong style="color: #d4a373;">"${bookName}"</strong>
-                            נוסף כעת לספרייה וזמין לעריכה.
-                        </p>
-                        <div style="margin: 30px 0;">
-                            <a href="${bookLink}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                                כנס לספרייה לעריכה
-                            </a>
-                        </div>
-                    </div>
-                    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 11px; color: #999; text-align: center;">
-                        קיבלת הודעה זו כי נרשמת לעדכונים מאוצריא. 
-                        <br>
-                        <a href="${unsubUrl}" style="color: #999; text-decoration: underline;">הסרה מרשימת התפוצה<br>שים לב שלא תקבל עוד עדכונים על ספרים חדשים!</a>
-                    </div>
+    const emailHtml = `
+    <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
+                <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
+                <h2 style="color: #d4a373; font-size: 20px; margin: 5px 0 0 0; font-weight: bold;">ספריית אוצריא</h2>
+            </div>
+            <div style="padding: 30px; color: #333333;">
+                <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">ספר חדש עלה לספריה!</h1>
+                <p style="font-size: 18px; line-height: 1.6;">
+                    אנו שמחים לעדכן כי הספר 
+                    <strong style="color: #d4a373;">"${safeName}"</strong>
+                    נוסף כעת לספרייה וזמין לעריכה.
+                </p>
+                <div style="margin: 30px 0;">
+                    <a href="${bookLink}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                        כנס לספרייה לעריכה
+                    </a>
                 </div>
             </div>
-            `;
-            
-            return transporter.sendMail({
-                from: {
-                    name: "ספריית אוצריא",
-                    address: process.env.SMTP_FROM
-                },
-                to: email, 
-                replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
-                subject: `📚 ספר חדש בספרייה: ${bookName}`,
-                headers: {
-                    'List-Unsubscribe': `<${unsubUrl}>`,
-                    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
-                },
-                html: emailHtml
-            });
-        });
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 11px; color: #999; text-align: center;">
+                קיבלת הודעה זו כי נרשמת לעדכונים מאוצריא. 
+                <br>
+                <a href="${unsubUrl}" style="color: #999; text-decoration: underline;">הסרה מרשימת התפוצה<br>שים לב שלא תקבל עוד עדכונים על ספרים חדשים!</a>
+            </div>
+        </div>
+    </div>
+    `;
 
-        await Promise.allSettled(sendPromises);
-        return { sent: true, count: validEmails.length };
-
-    } catch (error) {
-        console.error('Email Service Error:', error);
-        return { sent: false, error: error.message };
-    }
+    return {
+        from: {
+            name: "ספריית אוצריא",
+            address: process.env.SMTP_FROM
+        },
+        to: email,
+        replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
+        subject: `📚 ספר חדש בספרייה: ${bookName}`,
+        headers: {
+            'List-Unsubscribe': `<${unsubUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+        },
+        html: emailHtml
+    };
 }
 
 // תזכורת אוטומטית על עמודים תקועים בספר רגיל. pages הוא מערך עם { pageNumber, daysSinceEdit }

@@ -1,5 +1,5 @@
 // Uploads/storage are supplied by the live installation, not bundled build assets.
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
 import slugify from 'slugify';
@@ -8,7 +8,7 @@ import Book from '@/models/Book';
 import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { sendBookNotification } from '@/lib/emailService';
+import { queueBookNotification } from '@/lib/book-notifications/request';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
@@ -145,16 +145,18 @@ export async function POST(request) {
     await Page.insertMany(pagesData);
     await fs.remove(tempPdfPath); 
 
-    if (sendNotification) {
-      await sendBookNotification(bookName, slug);
-    }
+    // ההודעה למנויים נכנסת לתור ונשלחת ברקע במנות (issue #306) — לא בתוך הבקשה
+    const notification = sendNotification && !isHidden
+      ? await queueBookNotification(newBook, { requestedBy: session.user?.id, schedule: after })
+      : undefined;
 
     revalidateNow(CACHE_TAGS.BOOKS_ADMIN_LIST);
 
     return NextResponse.json({
       success: true, 
-      message: 'הספר הועלה ועובד בהצלחה' + (sendNotification ? ' (נשלחו התראות)' : ''),
-      bookId: newBook._id 
+      message: 'הספר הועלה ועובד בהצלחה' + (notification?.status === 'queued' ? ' (ההודעה למנויים נשלחת ברקע)' : ''),
+      bookId: newBook._id,
+      ...(notification ? { notification } : {}),
     });
 
   } catch (error) {

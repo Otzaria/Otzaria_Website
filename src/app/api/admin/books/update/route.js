@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { sendBookNotification } from '@/lib/emailService';
+import { queueBookNotification } from '@/lib/book-notifications/request';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
@@ -53,13 +53,14 @@ export async function PUT(request) {
         return notFound('Book not found');
     }
 
-    if (sendNotification && isHidden === false) {
-        await sendBookNotification(updatedBook.name, updatedBook.slug);
-    }
+    // ההודעה למנויים נכנסת לתור ונשלחת ברקע במנות (issue #306) — לא בתוך הבקשה
+    const notification = sendNotification && isHidden === false
+        ? await queueBookNotification(updatedBook, { requestedBy: session.user?.id, schedule: after })
+        : undefined;
 
     revalidateNow(CACHE_TAGS.BOOKS_ADMIN_LIST);
 
-    return NextResponse.json({ success: true, book: updatedBook });
+    return NextResponse.json({ success: true, book: updatedBook, ...(notification ? { notification } : {}) });
 
   } catch (error) {
     console.error('Update Error:', error);

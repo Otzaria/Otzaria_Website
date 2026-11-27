@@ -252,6 +252,8 @@ describe('BooksScreen — פעולות על ספר', () => {
 
   test('"הצג" לספר ציבורי מוסתר — דיאלוג עם בחירה מפורשת אם לשלוח הודעה', async () => {
     const user = userEvent.setup()
+    // השרת מכניס את ההודעה לתור ומחזיר מיד (issue #306) — לא "המנויים קיבלו הודעה"
+    handler = (c) => (c.method === 'PUT' ? json({ success: true, notification: { status: 'queued', total: 726 } }) : null)
     renderScreen()
     await user.click(within(row('ספר המידות')).getByRole('button', { name: 'פעולות נוספות: ספר המידות' }))
     await user.click(screen.getByRole('menuitem', { name: 'הצג' }))
@@ -259,6 +261,7 @@ describe('BooksScreen — פעולות על ספר', () => {
     await user.click(within(dialog).getByRole('button', { name: 'הצג ושלח הודעה' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(writes()[0].body).toEqual({ bookId: '3', isHidden: false, sendNotification: true })
+    expect(await screen.findByText(/ההודעה ל־726 המנויים נשלחת ברקע/)).toBeInTheDocument()
     // הודעה שנשלחה אי אפשר להחזיר — בלי "בטל"
     expect(screen.queryByRole('button', { name: 'בטל' })).toBeNull()
   })
