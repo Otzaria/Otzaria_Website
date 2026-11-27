@@ -42,6 +42,7 @@ export default function VerificationEvidence({ verification, source = null }) {
   if (source?.matchBasis === 'tags') notes.push('השורה אותרה לפי התוכן בלי התגיות — בקובץ התגיות שונות מאלה שבדיווח, והשינוי מחושב על השורה שבקובץ.')
   if (source?.pathMatch === 'name_fallback') notes.push('הקובץ אותר לפי שם הספר או שם הקובץ, כי הנתיב שנשלח מהתוכנה חסר או לא עדכני.')
   const rest = evidence.slice(SHOWN)
+  const explanation = typeof verification.volunteerExplanation?.text === 'string' && verification.volunteerExplanation.text ? verification.volunteerExplanation : null
   return (
     <section className="glass rounded-xl p-4 space-y-3 text-sm" aria-label="ממצאי שירות הבדיקה">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -52,6 +53,16 @@ export default function VerificationEvidence({ verification, source = null }) {
         <div className="space-y-1">
           {reason && <div className="text-xs text-on-surface/60">סיבה: {reason}</div>}
           {verification.message && <p className="whitespace-pre-wrap break-words" dir="rtl">{verification.message}</p>}
+        </div>
+      )}
+      {explanation && (
+        <div className="rounded-lg border border-outline-variant bg-surface-variant/40 p-2 space-y-1" aria-label="הסבר אוטומטי">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+            <h4 className="font-medium text-xs">הסבר אוטומטי</h4>
+            {explanation.model && <span className="text-[11px] text-on-surface/50" dir="ltr">{explanation.model}</span>}
+          </div>
+          <p className="whitespace-pre-wrap break-words leading-7" dir="rtl">{explanation.text}</p>
+          {explanation.note && <p className="text-xs text-on-surface/50">{explanation.note}</p>}
         </div>
       )}
       {notes.map((n) => <p key={n} className="text-xs rounded-lg bg-info-50 border border-info-200 text-info-800 p-2">{n}</p>)}

@@ -44,4 +44,35 @@ describe('VerificationEvidence', () => {
     expect(container.querySelector('b')).toBeNull()
     expect(screen.getByText('<b>מודגש</b>')).toBeInTheDocument()
   })
+
+  describe('הסבר אוטומטי', () => {
+    const base = { decision: 'needs_review', reasonCode: 'content_doubtful', message: 'עד אחד בלבד', evidence: ev(1) }
+    const expl = { text: 'המילה כתובה כך גם בדפוס אחר.', model: 'qwen3-8b', note: 'הסבר אוטומטי; אינו החלטה ואינו ראיה.' }
+
+    it('מוצג תחת כותרת "הסבר אוטומטי" עם ההערה והמודל', () => {
+      render(<VerificationEvidence verification={{ ...base, volunteerExplanation: expl }} />)
+      expect(screen.getByRole('heading', { name: 'הסבר אוטומטי' })).toBeInTheDocument()
+      expect(screen.getByText('המילה כתובה כך גם בדפוס אחר.')).toHaveAttribute('dir', 'rtl')
+      expect(screen.getByText('הסבר אוטומטי; אינו החלטה ואינו ראיה.')).toHaveClass('text-on-surface/50')
+      expect(screen.getByText('qwen3-8b')).toBeInTheDocument()
+      // שאר הלוח לא נפגע
+      expect(screen.getByText('עד אחד בלבד')).toBeInTheDocument()
+      expect(screen.getByText('ראיה מספר 1')).toBeInTheDocument()
+    })
+
+    it('בלי הסבר, או עם הסבר ריק — לא מוצג כלום', () => {
+      for (const v of [undefined, null, {}, { text: '', model: 'm', note: 'n' }, { text: 5 }]) {
+        const { unmount } = render(<VerificationEvidence verification={{ ...base, volunteerExplanation: v }} />)
+        expect(screen.queryByText('הסבר אוטומטי')).toBeNull()
+        unmount()
+      }
+    })
+
+    it('בלי מודל או בלי הערה — מוצג רק מה שיש; טקסט כטקסט ולא כ-HTML', () => {
+      const { container } = render(<VerificationEvidence verification={{ ...base, volunteerExplanation: { text: '<img src=x onerror=alert(1)> הסבר' } }} />)
+      expect(container.querySelector('img')).toBeNull()
+      expect(screen.getByText('<img src=x onerror=alert(1)> הסבר')).toBeInTheDocument()
+      expect(screen.queryByText('qwen3-8b')).toBeNull()
+    })
+  })
 })

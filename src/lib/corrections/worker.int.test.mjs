@@ -617,6 +617,29 @@ test('[D2] תגיות שונות והמקור כבר תוקן: נסגר "כבר 
   assert.equal((await load(r2._id)).state, 'open');
 });
 
+test('[L2] הסבר אוטומטי נשמר מסונן ומגיע למתנדב; בלעדיו — לא נשמר; ההחלטה אינה משתנה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const admin = await User.create({ name: 'מתנדב4', email: 'v4@example.org', password: 'x', isCorrectionsVolunteer: true });
+  const explain = { text: 'הסבר\u0000 קצר\u202E', source: 'llm', model: 'qwen3-8b', note: 'אוטומטי; אינו החלטה', extra: 'x' };
+  const a = await ingest('l2-explain', cfg());
+  const withIt = createMockVerifyFetch((call) => ({ status: 200, body: { ...buildMockDecision(call.body, { decision: 'needs_review', reasonCode: 'content_doubtful', message: 'עד אחד בלבד' }), volunteer_explanation: explain } }));
+  await run(cfg(), { verifyFetch: withIt, githubFetch: gh.fetch }, T0);
+  const s = await load(a._id);
+  assert.equal(s.verification.decision, 'needs_review');
+  assert.equal(s.state, 'open');
+  assert.deepEqual(JSON.parse(JSON.stringify(s.verification.volunteerExplanation)), { text: 'הסבר קצר', model: 'qwen3-8b', note: 'אוטומטי; אינו החלטה' });
+  const detail = await getReportDetail({ user: admin, id: String(a._id), config: cfg(), deps: { githubFetch: gh.fetch } });
+  assert.equal(detail.body.report.verification.volunteerExplanation.text, 'הסבר קצר');
+
+  const b = await ingest('l2-plain', cfg());
+  const plain = createMockVerifyFetch((call) => ({ status: 200, body: { ...buildMockDecision(call.body, { decision: 'needs_review', reasonCode: 'content_doubtful', message: 'עד אחד בלבד' }), volunteer_explanation: { text: 'x', source: 'human' } } }));
+  await run(cfg(), { verifyFetch: plain, githubFetch: gh.fetch }, T0);
+  const s2 = await load(b._id);
+  assert.equal(s2.verification.decision, 'needs_review');
+  assert.equal(s2.verification.volunteerExplanation ?? null, null);
+});
+
 test('[D2] ראיות השירות נשמרות בדיווח ומגיעות למתנדב בפרטי הדיווח (החלטה, נימוק וראיות)', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });

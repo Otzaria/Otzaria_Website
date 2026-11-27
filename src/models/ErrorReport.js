@@ -102,6 +102,8 @@ const ErrorReportSchema = new mongoose.Schema({
       type: [{ kind: String, source: String, edition: String, ref: String, page: String, snippet: String, supports: String, score: Number, assetId: String, _id: false }],
       default: undefined,
     },
+    // הסבר אוטומטי של מודל שפה (volunteer_explanation): להצגה למתנדבים בלבד, אינו משפיע על ההחלטה
+    volunteerExplanation: { type: { text: String, model: String, note: String, _id: false }, default: undefined },
     // המשימה הפעילה (worker.js): מזהה המשימה, ה-fence של התפיסה הנוכחית ותוקף ה-lease שלה (לעולם לא מאוחר מזה
     // שבמשימה). כל כתיבת החלטה מותנית בו — fence זהה ו-lease בתוקף ברגע הכתיבה; ביטול, השהיה, מתנדב או מעבר לידני
     // מנקים אותו באותו עדכון אטומי.
