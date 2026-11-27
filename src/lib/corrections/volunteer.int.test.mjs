@@ -237,6 +237,32 @@ test('[T21] שינוי לא קשור באותו קובץ בין אישור לפ�
   assert.equal(gh.readFile(r.publish.branch, PATH), FILE.replace(LINE, NEW).replace('סוף', 'סוף ערוך'));
 });
 
+// הביקורת (#312): אחרי אישור תקף הפסקה זזה, ובאינדקס הישן שורה זהה מפסקה אחרת — המקור (ישיר) או ההצעה (PR).
+for (const mode of ['direct', 'pr']) {
+  test(`הביקורת (${mode}): הפסקה זזה אחרי האישור ובאינדקס הישן שורה זהה מפסקה אחרת → האישור נפסל, בלי כתיבה ובלי "כבר תוקן"`, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    const config = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: mode });
+    const oldLine = 'באמצע הפסקה הייחודית נשארה המילה השגיאה ויש עוד מה להגיה';
+    const newLine = oldLine.replace('השגיאה', 'השגחה');
+    gh = new FakeGitHub({ repo: REPO, files: { [PATH]: ['הקדמת המחבר', 'הכרעת חכמים בעניין זה', oldLine, 'ועתה ראו חידוש נפלא', 'סיום הספר'].join('\n') } });
+    const id = await ingest(`rv-${mode}`, {}, { original_line: oldLine, original_selection: null, selection_offset: null, proposed_text: newLine, context_before: '', context_after: '' });
+    const c = await act(users.a, id, { action: 'claim' }, T0, config);
+    const d = await detail(users.a, id, config);
+    const ok = await act(users.a, id, { action: 'approve', generation: c.body.generation, revision: d.body.report.currentRevision, seenBlobSha: d.body.source?.blobSha }, T0, config);
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    const impostor = mode === 'direct' ? oldLine : newLine;
+    const moved = ['הקדמת המחבר', 'אמרות מפרק אחר', impostor, 'תוספות', 'הכרעת חכמים בעניין זה', oldLine, 'ועתה ראו חידוש נפלא', 'סיום הספר'].join('\n');
+    gh.pushExternal('main', { [PATH]: moved });
+    const before = writes();
+    await work(at(1), config);
+    const r = await ErrorReport.findById(id).lean();
+    assert.equal(gh.readFile('main', PATH), moved, 'השורה מהפסקה האחרת לא נערכה');
+    assert.equal(writes(), before, 'בלי כתיבה ל-GitHub');
+    assert.equal(gh.pulls.length, 0);
+    assert.deepEqual([r.state, r.manual.handoffReason, r.publish.conflictReason, r.approval.authority], ['open', 'source_changed_after_approval', 'source_not_resolved', 'none']);
+  });
+}
+
 test('[T22] טקסט חוזר: רק השורה באינדקס; מקור חסר/ששמו השתנה → בחירה ידנית של מקור ועריכה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   gh = new FakeGitHub({ repo: REPO, files: { [PATH]: `${LINE}\n\n${LINE}\n` } });

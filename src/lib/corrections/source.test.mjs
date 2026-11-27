@@ -213,6 +213,139 @@ test('[T21][T20] שינוי בקטע עצמו → PublishConflict, בלי קומ
   assert.equal(gh.headSha('main'), head);
 });
 
+// הביקורת (#312): אחרי אישור תקף הפסקה זזה, ובאינדקס הישן שורה זהה מפסקה אחרת — המקור (ישיר) או ההצעה (PR).
+const OLDP = 'באמצע הפסקה הייחודית נשארה המילה השגיאה ויש עוד מה להגיה';
+const NEWP = OLDP.replace('השגיאה', 'השגחה');
+const PBASE = ['הקדמת המחבר', 'הכרעת חכמים בעניין זה', OLDP, 'ועתה ראו חידוש נפלא', 'סיום הספר'].join('\n');
+const moved = (impostor) => ['הקדמת המחבר', 'אמרות מפרק אחר', impostor, 'תוספות', 'הכרעת חכמים בעניין זה', OLDP, 'ועתה ראו חידוש נפלא', 'סיום הספר'].join('\n');
+const pubChange = (gh) => changeFor(gh, { lineIndex: 2, originalLine: OLDP, newLine: NEWP });
+
+for (const [mode, impostor] of [['direct', OLDP], ['pr', NEWP]]) {
+  test(`הביקורת (${mode}): הפסקה זזה ובאינדקס הישן שורה זהה מפסקה אחרת → PublishConflict(source_not_resolved), בלי כתיבה ובלי "כבר תוקן"`, async () => {
+    const { gh, client } = setup({ [PATH]: PBASE });
+    const change = pubChange(gh);
+    gh.pushExternal('main', { [PATH]: moved(impostor) });
+    const head = gh.headSha('main');
+    await assert.rejects(
+      publishChange({ client, target: { branch: 'main', mode, maxRefRetries: 3 }, change, report: report(), attemptId: `pa_rv_${mode}` }),
+      (e) => e instanceof PublishConflict && e.reason === 'source_not_resolved' && e.details.target === 'target_ambiguous',
+    );
+    assert.equal(gh.headSha('main'), head);
+    assert.equal(gh.readFile('main', PATH), moved(impostor), 'השורה מהפסקה האחרת לא נערכה');
+    assert.equal(gh.calls.filter((c) => c.method !== 'GET').length, 0);
+  });
+}
+
+test('קובץ שהשתנה: הפסקה המדווחת היחידה זזה → הכתיבה במקום שאותר; תוקנה במקום אחר → already_fixed רק לפי האיתור', async () => {
+  const { gh, client } = setup({ [PATH]: PBASE });
+  const change = pubChange(gh);
+  const shiftedLines = ['שורה חדשה בראש', ...PBASE.split('\n')];
+  gh.pushExternal('main', { [PATH]: shiftedLines.join('\n') });
+  const out = await publishChange({ client, target: { branch: 'main', mode: 'direct', maxRefRetries: 3 }, change, report: report(), attemptId: 'pa_mv' });
+  assert.deepEqual([out.status, out.rebased], ['committed', true]);
+  assert.equal(gh.readFile('main', PATH), shiftedLines.map((l) => (l === OLDP ? NEWP : l)).join('\n'));
+
+  const two = setup({ [PATH]: PBASE });
+  const change2 = pubChange(two.gh);
+  two.gh.pushExternal('main', { [PATH]: ['שורה חדשה בראש', ...PBASE.split('\n').map((l) => (l === OLDP ? NEWP : l))].join('\n') });
+  const head = two.gh.headSha('main');
+  const fixed = await publishChange({ client: two.client, target: { branch: 'main', mode: 'pr', maxRefRetries: 3 }, change: change2, report: report(), attemptId: 'pa_fx' });
+  assert.equal(fixed.status, 'already_fixed');
+  assert.equal(two.gh.headSha('main'), head);
+});
+
+// הביקורת הרביעית (#312): האישור כלל תיקון מילה וגם שינוי HTML, והמקור קלט רק חלק ממנו. האיתור המנורמל (בלי תגיות)
+// מזהה את הפסקה ורואה שהמילה תוקנה, אבל "כבר תוקן" דורש שכל השינוי הגולמי שאושר יימצא בשורה שאותרה.
+const TAGP = 'באמצע הפסקה <b>הייחודית</b> נשארה המילה השגיאה ויש עוד מה להגיה';
+const TAGNEW = TAGP.replace('<b>הייחודית</b>', 'הייחודית').replace('השגיאה', 'השגחה');
+const TAGBASE = ['הקדמת המחבר', 'הכרעת חכמים בעניין זה', TAGP, 'ועתה ראו חידוש נפלא', 'סיום הספר'];
+// המקור אחרי האישור: שורה חדשה בראש הקובץ (הפסקה זזה), והפסקה המדווחת כפי שנקלטה
+const tagMain = (...para) => ['שורה חדשה בראש', ...TAGBASE.flatMap((l) => (l === TAGP ? para : [l]))].join('\n');
+const publishTagged = async (mode, main, attemptId) => {
+  const { gh, client } = setup({ [PATH]: TAGBASE.join('\n') });
+  const change = changeFor(gh, { lineIndex: 2, originalLine: TAGP, newLine: TAGNEW });
+  gh.pushExternal('main', { [PATH]: main });
+  const head = gh.headSha('main');
+  const run = () => publishChange({ client, target: { branch: 'main', mode, maxRefRetries: 3 }, change, report: report(), attemptId });
+  return { gh, head, run };
+};
+
+test('הביקורת הרביעית: המקור קלט רק חלק מהשינוי שאושר (המילה בלי ה-HTML, או להפך) → PublishConflict(source_changed), בלי כתיבה ובלי "כבר תוקן"', async () => {
+  const partial = {
+    'רק המילה': TAGP.replace('השגיאה', 'השגחה'),
+    'המילה ותגית אחרת': TAGP.replace('<b>הייחודית</b>', '<i>הייחודית</i>').replace('השגיאה', 'השגחה'),
+    'רק ה-HTML': TAGP.replace('<b>הייחודית</b>', 'הייחודית'),
+    'המילה, ופסקה שפוצלה לשתי שורות': TAGNEW.replace(' המילה', '\nהמילה'),
+  };
+  for (const mode of ['direct', 'pr']) {
+    for (const [label, para] of Object.entries(partial)) {
+      const { gh, head, run } = await publishTagged(mode, tagMain(...para.split('\n')), `pa_part_${mode}`);
+      await assert.rejects(run(), (e) => e instanceof PublishConflict && e.reason === 'source_changed', `${mode}: ${label}`);
+      assert.equal(gh.headSha('main'), head, `${mode}: ${label}`);
+      assert.equal(gh.calls.filter((c) => c.method !== 'GET').length, 0, `${mode}: ${label}`);
+    }
+  }
+});
+
+test('הביקורת הרביעית: שורה זהה להצעה במקום שאותר אינה מספיקה — עותק של הפסקה שבו המילה תוקנה והתגיות לא → PublishConflict', async () => {
+  const wordOnly = TAGP.replace('השגיאה', 'השגחה');
+  const variants = {
+    // פיתיון זהה להצעה במקום הישן, והפסקה המדווחת זזה לסוף הקובץ (עם תוספת בראשה) — המילה תוקנה, התגיות לא
+    'פיתיון במקום הישן': [TAGBASE.join('\n'), [...TAGBASE.map((l) => (l === TAGP ? TAGNEW : l)), `תוספת: ${wordOnly}`].join('\n')],
+    // תאום שכבר היה תקין בבסיס, והפסקה המדווחת קלטה רק את המילה
+    'תאום תקין מהבסיס': [[...TAGBASE, TAGNEW].join('\n'), ['שורה חדשה בראש', ...TAGBASE.map((l) => (l === TAGP ? wordOnly : l)), TAGNEW].join('\n')],
+  };
+  for (const mode of ['direct', 'pr']) {
+    for (const [label, [base, main]] of Object.entries(variants)) {
+      const { gh, client } = setup({ [PATH]: base });
+      const change = changeFor(gh, { lineIndex: 2, originalLine: TAGP, newLine: TAGNEW });
+      gh.pushExternal('main', { [PATH]: main });
+      const head = gh.headSha('main');
+      const run = publishChange({ client, target: { branch: 'main', mode, maxRefRetries: 3 }, change, report: report(), attemptId: `pa_decoy_${mode}` });
+      await assert.rejects(run, (e) => e instanceof PublishConflict && e.reason === 'source_changed', `${mode}: ${label}`);
+      assert.equal(gh.headSha('main'), head, `${mode}: ${label}`);
+    }
+  }
+});
+
+// הביקורת החמישית: אותו פיתיון, והעותק שזז שומר את ה-<b> שההצעה הסירה — עם <i> בתוכו או כ-<strong>. הקטע הגולמי הרציף
+// של הכלל הקודם לא נמצא בעותק כזה; כלל 9 משווה את התגיות בכל מופע של המילים שסביב השינוי לתגיות שבהצעה.
+test('הביקורת החמישית: עותק שזז ובו התגית שהוסרה נשארה (עם <i> בתוכה, או כ-<strong>) → PublishConflict, גם עם שורה זהה להצעה במקום הישן', async () => {
+  const fixedWord = (para) => para.replace('השגיאה', 'השגחה');
+  const copies = {
+    'i בתוך b': fixedWord(TAGP.replace('<b>הייחודית</b>', '<b><i>הייחודית</i></b>')),
+    'strong במקום b': fixedWord(TAGP.replace('<b>הייחודית</b>', '<strong>הייחודית</strong>')),
+  };
+  for (const mode of ['direct', 'pr']) {
+    for (const [label, copy] of Object.entries(copies)) {
+      const { gh, client } = setup({ [PATH]: TAGBASE.join('\n') });
+      const change = changeFor(gh, { lineIndex: 2, originalLine: TAGP, newLine: TAGNEW });
+      gh.pushExternal('main', { [PATH]: [...TAGBASE.map((l) => (l === TAGP ? TAGNEW : l)), `תוספת: ${copy}`].join('\n') });
+      const head = gh.headSha('main');
+      const run = publishChange({ client, target: { branch: 'main', mode, maxRefRetries: 3 }, change, report: report(), attemptId: `pa_r5_${mode}` });
+      await assert.rejects(run, (e) => e instanceof PublishConflict && e.reason === 'source_changed', `${mode}: ${label}`);
+      assert.equal(gh.headSha('main'), head, `${mode}: ${label}`);
+    }
+  }
+  // שמירה: עותק שזז וקלט את כל השינוי → "כבר תוקן" בלי כתיבה
+  const { gh, client } = setup({ [PATH]: TAGBASE.join('\n') });
+  const change = changeFor(gh, { lineIndex: 2, originalLine: TAGP, newLine: TAGNEW });
+  gh.pushExternal('main', { [PATH]: ['שורה חדשה בראש', ...TAGBASE.map((l) => (l === TAGP ? TAGNEW : l))].join('\n') });
+  const res = await publishChange({ client, target: { branch: 'main', mode: 'direct', maxRefRetries: 3 }, change, report: report(), attemptId: 'pa_r5_ok' });
+  assert.equal(res.status, 'already_fixed');
+});
+
+test('הביקורת הרביעית: כל השינוי הגולמי שאושר נקלט — ההצעה עצמה, או העריכה בהקשרה לצד תיקון אחר באותה שורה → already_fixed', async () => {
+  const taken = { 'ההצעה עצמה': TAGNEW, 'לצד תיקון אחר בסוף השורה': TAGNEW.replace('להגיה', 'להגהה') };
+  for (const mode of ['direct', 'pr']) {
+    for (const [label, para] of Object.entries(taken)) {
+      const { gh, head, run } = await publishTagged(mode, tagMain(para), `pa_full_${mode}`);
+      assert.equal((await run()).status, 'already_fixed', `${mode}: ${label}`);
+      assert.equal(gh.headSha('main'), head, `${mode}: ${label}`);
+    }
+  }
+});
+
 test('ענף שהתקדם בין הקריאה ל-PATCH → 422 → קריאה ואימות מחדש, בלי לשלב בסיס ישן', async () => {
   const { gh, client } = setup();
   let raced = false;

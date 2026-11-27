@@ -470,6 +470,10 @@ inclusion.status    : unknown | merged_to_main | included_in_release (+ release_
 report.status       : open | email_only | closed_published | closed_already_fixed | closed_rejected | closed_manual
 ```
 
+תת-מצב של `pr_opened`: עם `publish.pr_closed_at` (`prClosedAt`) — ה-PR נסגר בלי מיזוג והדיווח ממתין שהתיקון
+ייקלט ב-main (§5.3); לא בתור הידני ולא ניתן ללקיחה. `committed` עם `publish.absorbed=true` ו-`close_reason=pr_absorbed`
+= התיקון נמצא ב-main אחרי שה-PR נסגר בלי מיזוג.
+
 מעברי מצב מתבצעים **תמיד** עם תנאי גרסה (`workflow_generation` / lease fence) בעדכון
 אטומי יחיד (`findOneAndUpdate` עם התנאי בשאילתה). לחיצה כפולה, worker ישן או תשובה
 מאוחרת נכשלים בשקט ונרשמים ב-`history`.
@@ -481,8 +485,18 @@ report.status       : open | email_only | closed_published | closed_already_fixe
 - ה-worker מושהה בשבת וביום טוב (החלטת מוצר, ברירת מחדל פעילה; `health` מסמן `worker_paused`
   כשיש עבודה ממתינה). fence ו-lease נבדקים לפני **כל** כתיבה ל-GitHub.
 - תשובת שירות עם `generation` ישן על המשימה הנוכחית: נשמרת להיסטוריה והדיווח עובר לידני
-  (`response_mismatch`), כדי שלא ייתקע ב-`in_progress`. `already_fixed` נסגר רק כשהתיקון
+  (`response_mismatch`), כדי שלא ייתקע ב-`in_progress`. `already_fixed` (מהשירות) נסגר רק כשהתיקון
   נמצא בשורה המדווחת עצמה.
+- **PR שנסגר בלי מיזוג** (מנהל הספרייה מחיל PRs בקומיט מקומי וסוגר אותם): "נקלט" נקבע רק לפי תוכן
+  `main`, בשורת היעד המעוגנת — המקום שבו השכנים שלה בבסיס בזמן האישור (עד שתי שורות לא-ריקות מכל צד,
+  עד 50 שורות מהמיקום המקורי) תואמים. בשורה הזו: השורה כולה היא `new_line`, או — כשהוחלו באותה שורה
+  גם תיקונים אחרים — העריכה של הדיווח בהקשרה (עד 12 תווים מכל צד) נמצאת והמקורית לא. מופע של הנוסח
+  המתוקן בשורה אחרת אינו ראיה. בלי עיגון — "נקלט" רק כשהמקור אינו נמצא עד 50 שורות מהמיקום המקורי, ועם
+  הקובץ המלא בבסיס רק כשנוסף בסביבה בדיוק מופע אחד של התיקון לעומת הבסיס. נקלט → `committed`/`closed_published` (`close_reason=pr_absorbed`,
+  `inclusion=merged_to_main`). אחרת — ממתין (`pr_opened` + `prClosedAt`) ונבדק שוב, עד 14 יום מזיהוי
+  הסגירה, ואז ידני (`pr_closed_not_absorbed` / `source_changed_after_pr_close` / `pr_closed_unverified`).
+  תווית דחייה על ה-PR → ידני מיד (`pr_rejected_by_maintainer`); תווית לעולם אינה סוגרת כ"נקלט". הערת
+  הסגירה נשמרת להצגה בלבד ואינה מנותחת. פירוט תפעולי: OPERATIONS §4.
 - `manual.status = released` = שחרור בידי מתנדב בלבד; אחרי אישור/סגירה הערך חוזר ל-`none`.
   `direct` = בחירה מפורשת של מנהל כללי במסך הניהול. `disabled` = לא מפרסמים (ברירת המחדל).
 - יעד (ריפו/ענף) = קבוע בקוד (`Otzaria/otzaria-library@main`); לעולם לא מהבקשה/מהשירות.

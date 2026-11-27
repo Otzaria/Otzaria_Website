@@ -27,7 +27,8 @@ export function deriveLabels(r) {
   }
   if (pub.status === 'failed') add('publish_failed', 'פרסום נכשל', 'danger');
   if (pub.status === 'unknown_needs_reconcile') add('publish_unknown', 'תוצאת פרסום לא ידועה ונבדקת', 'warn');
-  if (pub.status === 'pr_opened') add('pr_opened', 'נפתח PR (טרם מוזג)', 'info');
+  if (pub.status === 'pr_opened' && pub.prClosedAt) add('pr_closed_awaiting', 'ה-PR נסגר — ממתין לקליטה ב-main', 'info');
+  else if (pub.status === 'pr_opened') add('pr_opened', 'נפתח PR (טרם מוזג)', 'info');
   if (pub.status === 'committed' || r.state === 'closed_published') add('published', 'פורסם במקור', 'success');
   if (pub.status === 'skipped_already_fixed' || r.state === 'closed_already_fixed') add('already_fixed', 'כבר תוקן במקור', 'success');
   if (r.inclusion?.status === 'included_in_release') add('in_release', 'נכלל בגרסת ספרייה', 'success');

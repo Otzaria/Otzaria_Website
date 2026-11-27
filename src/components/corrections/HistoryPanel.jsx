@@ -27,7 +27,12 @@ const EVENT_LABELS = {
   publish_reconciled: 'בדיקת תוצאת פרסום לא ידועה',
   pr_merged: 'ה-PR מוזג',
   pr_closed_unmerged: 'ה-PR נסגר בלי מיזוג',
+  pr_closed_awaiting_absorption: 'ה-PR נסגר בלי מיזוג — ממתינים שהתיקון ייקלט ב-main',
+  pr_absorbed: 'ה-PR נסגר בלי מיזוג והתיקון נמצא ב-main',
+  migration_reverted: 'בוטל מעבר של סקריפט תחזוקה',
 }
+
+const ACTORS = { worker: 'מערכת', system: 'סקריפט תחזוקה' }
 
 const AUTHOR = { user: 'המשתמש', service: 'שירות הבדיקה', volunteer: 'מתנדב' }
 
@@ -96,8 +101,9 @@ export default function HistoryPanel({ detail }) {
           {history.map((h, i) => (
             <li key={i}>
               {new Date(h.at).toLocaleString('he-IL')} · {EVENT_LABELS[h.type] || h.type}
-              {h.actorName ? ` · ${h.actorName}` : h.actorKind === 'worker' ? ' · מערכת' : ''}
+              {h.actorName ? ` · ${h.actorName}` : ACTORS[h.actorKind] ? ` · ${ACTORS[h.actorKind]}` : ''}
               {h.data?.reason ? ` · ${h.data.reason}` : ''}
+              {h.data?.comment ? ` · «${h.data.comment}»` : ''}
             </li>
           ))}
         </ul>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import UnifiedDiff from '@/components/corrections/UnifiedDiff'
 import ManualSourcePicker from '@/components/corrections/ManualSourcePicker'
+import PrCloseNote from '@/components/corrections/PrCloseNote'
 import { rebaseLineChange } from '@/lib/corrections/rebase-change'
 
 const btn = 'px-3 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1'
@@ -82,17 +83,23 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
   if (PUBLISHING.has(pub)) {
     const writing = pub === 'in_progress' || pub === 'unknown_needs_reconcile'
     const pr = pub === 'pr_opened' && report.publish?.prUrl
+    // מנהל הספרייה סוגר PR אחרי שהחיל אותו בקומיט מקומי; הדיווח נסגר כשהתיקון מגיע ל-main.
+    const prClosed = pr && report.publish?.prClosedAt
+    const prLink = pr ? <a href={report.publish.prUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">PR #{report.publish.prNumber}</a> : null
     return (
       <div className="glass rounded-xl p-4 space-y-3">
         <div className="text-sm flex flex-wrap items-center gap-x-2">
           <span className="material-symbols-outlined text-base text-success-700">verified</span>
           <span>
             הדיווח אושר{report.approval?.byName ? <> ע&quot;י <b>{report.approval.byName}</b></> : null}
-            {pr
-              ? <> ונפתח עבורו <a href={report.publish.prUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">PR #{report.publish.prNumber}</a>. הוא ייסגר אוטומטית כשה-PR ימוזג.</>
-              : writing ? ' והפרסום ל-GitHub מתבצע כעת.' : ' וממתין לפרסום.'}
+            {prClosed
+              ? <>. {prLink} נסגר בלי מיזוג; הדיווח ייסגר אוטומטית כשהתיקון יימצא ב-main, ואם לא ייקלט — יחזור לטיפול.</>
+              : pr
+                ? <> ונפתח עבורו {prLink}. הוא ייסגר אוטומטית כשה-PR ימוזג.</>
+                : writing ? ' והפרסום ל-GitHub מתבצע כעת.' : ' וממתין לפרסום.'}
           </span>
         </div>
+        {prClosed && <PrCloseNote publish={report.publish} awaiting />}
         <p className="text-xs text-on-surface/70">אי אפשר לקחת לטיפול דיווח שאושר — זה יוצר PR כפול. אם האישור שגוי, אפשר לדחות אותו.</p>
         {writing ? (
           <p className="text-xs text-warning-800">הפרסום מתבצע כרגע; הדחייה תתאפשר כשיסתיים.</p>
@@ -103,7 +110,9 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-danger-700 font-medium">
-              {pr ? `הדחייה תסגור את PR #${report.publish.prNumber} ב-GitHub בלי למזג אותו, ותסגור את הדיווח.` : 'הדחייה תבטל את הפרסום המתוכנן ותסגור את הדיווח.'}
+              {prClosed
+                ? `הדחייה תסגור את הדיווח ותוסיף את הסיבה כהערה ב-PR #${report.publish.prNumber} (שכבר נסגר).`
+                : pr ? `הדחייה תסגור את PR #${report.publish.prNumber} ב-GitHub בלי למזג אותו, ותסגור את הדיווח.` : 'הדחייה תבטל את הפרסום המתוכנן ותסגור את הדיווח.'}
             </p>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="סיבת הדחייה (חובה)" className="w-full border rounded-lg p-2 bg-white" />
             <div className="flex gap-2">
@@ -112,7 +121,7 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
                 onClick={async () => { if (await run({ action: 'reject_approved', generation: g, reason })) setMode(null) }}
                 className={`${btn} bg-danger-600 text-white`}
               >
-                {pr ? 'דחייה וסגירת ה-PR' : 'דחייה סופית'}
+                {pr && !prClosed ? 'דחייה וסגירת ה-PR' : 'דחייה סופית'}
               </button>
               <button onClick={() => setMode(null)} className={`${btn} glass`}>ביטול</button>
             </div>
@@ -169,6 +178,7 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
           ? <>בטיפולך עד {leaseText}</>
           : <>{claimed ? <>הטיפול של <b>{report.manual.assigneeName}</b> פג ב-{leaseText}. </> : 'הדיווח אינו משויך למטפל. '}<span className="text-on-surface/60">כל פעולה תשייך אותו אליך.</span></>}
       </div>
+      <PrCloseNote publish={report.publish} />
       <div className="flex flex-wrap gap-2">
         <button
           disabled={busy || Boolean(approveBlocked)}
