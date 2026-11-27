@@ -97,6 +97,11 @@ const ErrorReportSchema = new mongoose.Schema({
     message: String,
     authorityExceeded: Boolean,
     completedAt: Date,
+    // ראיות השירות (evidence[], חוזה B): להצגה למתנדבים בלבד
+    evidence: {
+      type: [{ kind: String, source: String, edition: String, ref: String, page: String, snippet: String, supports: String, score: Number, assetId: String, _id: false }],
+      default: undefined,
+    },
     // המשימה הפעילה (worker.js): מזהה המשימה, ה-fence של התפיסה הנוכחית ותוקף ה-lease שלה (לעולם לא מאוחר מזה
     // שבמשימה). כל כתיבת החלטה מותנית בו — fence זהה ו-lease בתוקף ברגע הכתיבה; ביטול, השהיה, מתנדב או מעבר לידני
     // מנקים אותו באותו עדכון אטומי.

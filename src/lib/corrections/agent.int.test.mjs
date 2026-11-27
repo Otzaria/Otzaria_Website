@@ -415,7 +415,7 @@ test('משיכה: "כבר הוחל" מדויק אינו נמסר לשירות �
 test('משיכה: מקור שלא אותר → ידני ואינו נמסר; התפיסה ממשיכה למשימה הבאה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const c = pull();
-  const lost = await ingest('p-lost', c, { file_path: 'אוצריא/אין/כזה.txt', source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: 'אוצריא/אין/כזה.txt' } });
+  const lost = await ingest('p-lost', c, { book_title: 'ספר שאינו קיים', file_path: 'אוצריא/אין/כזה.txt', source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: 'אוצריא/אין/כזה.txt' } });
   const good = await ingest('p-good', c);
   const { job } = await claim(c, T0);
   assert.equal(job.request.report_id, String(good._id));
@@ -719,7 +719,7 @@ test('משיכה: התפיסה מסמנת batchDue כשלא רצה אצווה ז
 test('משיכה: תקציב הזמן של התפיסה — חוזרת עם Retry-After קצר בלי לתפוס משימה נוספת (אין lease יתום)', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const c = pull();
-  const lost = { file_path: 'אוצריא/אין/כזה.txt', source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: 'אוצריא/אין/כזה.txt' } };
+  const lost = { book_title: 'ספר שאינו קיים', file_path: 'אוצריא/אין/כזה.txt', source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: 'אוצריא/אין/כזה.txt' } };
   for (const id of ['p-slow-1', 'p-slow-2', 'p-slow-3']) await ingest(id, c, lost);
   const good = await ingest('p-slow-good', c);
   // הזמן מתקדם רק בקריאות GitHub (איטיות), כך שמספר קריאות השעון אינו משפיע.
@@ -756,7 +756,7 @@ test('משיכה: הסריקה דילגה על כל המשימות שבדקה �
   if (db.skip) return t.skip(db.skip);
   const c = pull();
   const narrow = { ...c, agent: { ...c.agent, claimScan: 2 } };
-  const lost = { file_path: 'אוצריא/אין/כזה.txt', source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: 'אוצריא/אין/כזה.txt' } };
+  const lost = { book_title: 'ספר שאינו קיים', file_path: 'אוצריא/אין/כזה.txt', source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: 'אוצריא/אין/כזה.txt' } };
   for (const id of ['p-scan-1', 'p-scan-2', 'p-scan-3']) await ingest(id, c, lost);
   const good = await ingest('p-scan-good', c);
   assert.deepEqual(idle(await claim(narrow, T0)), { job: null, retryAfter: 5 });

@@ -636,3 +636,25 @@ test('סינון לפי ספר (חלק מהשם, בלי פרשנות regex) וא
   assert.deepEqual(opts.body.books, ['בראשית', 'כתר ראש (גר"א)']);
   assert.equal((await listFilterOptions({ user: users.plain })).status, 403);
 });
+
+test('[D2] שורה שאותרה לפי התוכן בלי תגיות: אישור מתנדב כותב את השינוי על השורה שבקובץ ושומר את תגיות הקובץ', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const REPORTED = 'ויאמר אלהים <sup class="footnote-marker">1</sup> יהי אור ויהי אור בעולם הזה כולו';
+  const PROPOSED = 'ויאמר אלקים <sup class="footnote-marker">1</sup> יהי אור ויהי אור בעולם הזה כולו';
+  const IN_FILE = 'ויאמר אלהים <sup>1</sup> יהי אור ויהי אור בעולם הזה כולו';
+  const WRITTEN = 'ויאמר אלקים <sup>1</sup> יהי אור ויהי אור בעולם הזה כולו';
+  gh = new FakeGitHub({ repo: REPO, files: { [PATH]: `<h1>בראשית</h1>\nפסקה ראשונה בספר הבדיקה הזה\n${IN_FILE}\nפסקה אחרונה בספר הבדיקה הזה\n` } });
+  const id = await ingest('d2-tags-approve', {}, { original_line: REPORTED, original_selection: null, selection_offset: null, proposed_text: PROPOSED, context_before: '', context_after: '' });
+  const d = await detail(users.a, id);
+  assert.equal(d.body.source.status, 'relocated');
+  assert.equal(d.body.source.matchBasis, 'tags');
+  assert.equal(d.body.source.rebasedNewLine, WRITTEN);
+  const res = await claimAndApprove(users.a, id);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const pkg = await ChangePackage.findOne({ report: id }).lean();
+  assert.equal(pkg.originalLine, IN_FILE);
+  assert.equal(pkg.newLine, WRITTEN);
+  await work(at(1));
+  const r = await ErrorReport.findById(id).lean();
+  assert.equal(gh.readFile(r.publish.branch, PATH).split('\n')[2], WRITTEN);
+});

@@ -761,7 +761,7 @@ export async function applyVerifyResponse(job, { report, rev, source, request },
 }
 
 async function applyServiceDecision({ job, report, rev, source, value, authorityExceeded, config, deps, now }) {
-  const sentNewLine = computeNewLine(rev);
+  const sentNewLine = typeof source.rebasedNewLine === 'string' ? source.rebasedNewLine : computeNewLine(rev);
   // "כבר תוקן" נבדק רק במיקום שנשלח ולשורה המוצעת — לא בכל מקום שהשירות מצביע עליו.
   const c = value.change;
   const sameTarget = c && c.path === source.path && c.lineIndex === source.lineIndex && c.newLine === sentNewLine;
@@ -773,7 +773,7 @@ async function applyServiceDecision({ job, report, rev, source, value, authority
     autoPublish: config.autoPublish,
     autoRejectAllowed: config.verify.autoRejectAllowed,
     sentNewLine, sentPath: source.path, sentLineIndex: source.lineIndex, sentBlobSha: source.blobSha, sentRepo: config.source.repo,
-    manualActive: false, finalState: false, localAlreadyFixedVerified,
+    manualActive: false, finalState: false, localAlreadyFixedVerified, inexactMatch: source.matchBasis === 'tags',
   });
   const decisionEntry = {
     decisionId: value.decisionId, source: 'service', decision: value.decision, scope: value.approvalScope, reasonCode: value.reasonCode,
@@ -789,6 +789,8 @@ async function applyServiceDecision({ job, report, rev, source, value, authority
     'verification.status': 'completed', 'verification.decisionId': value.decisionId, 'verification.decision': value.decision,
     'verification.reasonCode': value.reasonCode, 'verification.message': value.message, 'verification.authorityExceeded': authorityExceeded,
     'verification.completedAt': now, 'verification.activeJob': null, 'dispatch.verify': false,
+    // ראיות השירות להצגה למתנדבים (נתונים בלבד, לא משפיעות על הניתוב)
+    'verification.evidence': value.evidence ?? [],
   };
   let update;
   let changeId = null;

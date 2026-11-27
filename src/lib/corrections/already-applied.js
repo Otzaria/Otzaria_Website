@@ -69,7 +69,9 @@ export function isLocatedFixed(source) {
  */
 export function isExactlyApplied(source, rev) {
   if (source?.status !== 'already_applied' || typeof source.currentLine !== 'string') return false;
-  if (source.currentLine !== committedNewLine(source, computeNewLine(rev))) return false;
+  // שורה בתגיות אחרות מההצעה (matchLineLoose): רק כשהעריכה עצמה במקומה, והשורה המוצעת אינה נדרשת להופיע בדיוק
+  const tagVariant = source.editApplied === true && source.matchBasis === 'tags';
+  if (!tagVariant && source.currentLine !== committedNewLine(source, computeNewLine(rev))) return false;
   const occ = source.occurrences;
-  return occ?.original === 0 && occ?.proposed === 1 && isDistinctiveLine(source.currentLine) && isLocatedFixed(source) && source.located.rawHeld === false;
+  return occ?.original === 0 && (tagVariant || occ?.proposed === 1) && isDistinctiveLine(source.currentLine) && isLocatedFixed(source) && source.located.rawHeld === false;
 }
