@@ -91,6 +91,8 @@ Middleware שחוסם את כל האתר (מלבד `/api/cron`, `/api/auth`, ו�
 ריפו נפרד), שמסווג תשובות לפי קוד הסטטוס (401/403 = תצורה, 408/429/5xx = זמני, שאר 4xx = עצירת העבודה).
 החוזה וקודי השגיאה: `docs/ocr-local-worker/CONTRACT.md`; תפעול: `docs/ocr-local-worker/OPERATIONS.md`.
 על `OcrJob` — רק עדכונים מותנים (`updateOne`/`findOneAndUpdate`/`lean`), אף פעם `doc.save()`.
+`src/app/api/worker/v1/corrections/**` נצרך ע"י שירות בדיקת התיקונים במצב משיכה (`OtzariaVerifyAgent`,
+סוד נפרד `CORRECTIONS_AGENT_SECRET`); החוזה: `docs/text-corrections/CONTRACT.md` §3.7. על `CorrectionJob` — אותו כלל.
 
 גם `src/app/api/app-reports/triage/**` חיצוני: נצרך ע"י שירות הבדיקה האוטומטית של תקיעות וקריסות
 (מאגר פרטי `Otzaria/app-report-triage`). החוזה: `docs/app-reports/TRIAGE.md`.

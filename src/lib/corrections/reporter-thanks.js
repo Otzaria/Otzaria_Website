@@ -64,6 +64,20 @@ export async function sendApprovalThanks({ id, kind = 'approved', sendMail, conf
   return { sent: true };
 }
 
+// שולח המייל של האתר, נטען רק כשבאמת שולחים (מודול כבד, וכתובת ברירת המחדל אינה מקבלת מייל).
+async function defaultSendMail(args) {
+  const { sendCorrectionApprovedThanks } = await import('../emailService.js');
+  return sendCorrectionApprovedThanks(args);
+}
+
+/**
+ * סגירה אוטומטית של "כבר תוקן" (בלי מתנדב): אותה הודעה ואותם כללים כמו בסגירת "כבר תוקן" של מתנדב —
+ * פעם אחת לדיווח, לא למי שביקש להסיר, ולא לכתובת ברירת המחדל.
+ */
+export function sendAlreadyFixedThanks(id, { sendMail, config } = {}) {
+  return sendApprovalThanks({ id, kind: 'already_fixed', sendMail: sendMail ?? defaultSendMail, config });
+}
+
 /** מתזמן את מייל התודה אחרי התשובה למתנדב. best-effort: כשל נרשם בלוג בלבד. */
 export function scheduleApprovalThanks(deps, id, kind = 'approved') {
   if (typeof deps?.schedule !== 'function' || typeof deps?.sendThanksMail !== 'function') return;

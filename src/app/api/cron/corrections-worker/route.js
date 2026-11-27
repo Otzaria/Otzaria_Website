@@ -17,7 +17,7 @@ async function run(request) {
     const stats = result.stats;
     return NextResponse.json({
       ok: !stats.error, drained: stats.drained, dispatched: stats.dispatched,
-      verify: stats.verify.length, publish: stats.publish.length, prTracked: stats.prTracked, error: stats.error,
+      verify: stats.verify.length, swept: stats.swept, publish: stats.publish.length, prTracked: stats.prTracked, error: stats.error,
     });
   } catch (err) {
     console.error('[corrections-worker] batch failed:', err?.message);

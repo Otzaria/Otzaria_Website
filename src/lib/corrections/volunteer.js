@@ -210,7 +210,7 @@ export async function claimReport({ user, id, config, now = new Date() }) {
   };
   const claimSet = {
     'manual.status': 'claimed', 'manual.assignee': user._id, 'manual.assigneeName': user.name, 'manual.claimedAt': now,
-    'manual.leaseExpiresAt': lease, 'dispatch.verify': false, status: 'in_progress', assignedTo: user._id,
+    'manual.leaseExpiresAt': lease, 'dispatch.verify': false, 'verification.activeJob': null, status: 'in_progress', assignedTo: user._id,
   };
   // דיווח שאושר (ממתין לפרסום / בפרסום / PR פתוח) אינו נלקח: לקיחה ואישור חוזר יצרו PR כפול.
   // הפעולה היחידה עליו היא דחייה (rejectApprovedReport).
@@ -227,7 +227,7 @@ export async function claimReport({ user, id, config, now = new Date() }) {
   if (['queued', 'in_progress'].includes(updated.verification?.status)) {
     await ErrorReport.updateOne({ _id: id, workflowGeneration: updated.workflowGeneration }, { $set: { 'verification.status': 'superseded' } });
   }
-  await cancelActiveJobs(updated._id, 'verify', 'manual_claim');
+  await cancelActiveJobs(updated._id, 'verify', 'manual_claim', updated.workflowGeneration);
   await logEvent(updated._id, 'claimed', userActor(user), updated.workflowGeneration, { leaseExpiresAt: lease });
   return ok({ generation: updated.workflowGeneration, leaseExpiresAt: lease });
 }
@@ -253,11 +253,11 @@ export async function reassignReport({ user, id, generation, targetUserId, confi
   if (!canManageCorrections(user)) Object.assign(filter, { 'manual.status': 'claimed', 'manual.assignee': user._id });
   const lease = new Date(now.getTime() + config.manual.claimMinutes * 60_000);
   const updated = await ErrorReport.findOneAndUpdate(filter, {
-    $set: { 'manual.status': 'claimed', 'manual.assignee': target._id, 'manual.assigneeName': target.name, 'manual.claimedAt': now, 'manual.leaseExpiresAt': lease, 'dispatch.verify': false, status: 'in_progress', assignedTo: target._id },
+    $set: { 'manual.status': 'claimed', 'manual.assignee': target._id, 'manual.assigneeName': target.name, 'manual.claimedAt': now, 'manual.leaseExpiresAt': lease, 'dispatch.verify': false, 'verification.activeJob': null, status: 'in_progress', assignedTo: target._id },
     $inc: { workflowGeneration: 1 },
   }, { returnDocument: 'after' }).lean();
   if (!updated) return err(409, 'stale_view');
-  await cancelActiveJobs(updated._id, 'verify', 'manual_reassign');
+  await cancelActiveJobs(updated._id, 'verify', 'manual_reassign', updated.workflowGeneration);
   await logEvent(updated._id, 'reassigned', userActor(user), updated.workflowGeneration, { to: String(target._id), toName: target.name });
   return ok({ generation: updated.workflowGeneration });
 }
@@ -414,7 +414,7 @@ export async function rejectApprovedReport({ user, id, generation, reason, confi
     { returnDocument: 'after' },
   ).lean();
   if (!updated) return err(409, 'stale_view');
-  await cancelActiveJobs(r._id, 'publish', 'rejected_after_approval');
+  await cancelActiveJobs(r._id, 'publish', 'rejected_after_approval', updated.workflowGeneration);
   let prClosed = null;
   if (prNumber) {
     try {
@@ -489,7 +489,7 @@ export async function resubmitToService({ user, id, generation, config, now = ne
     {
       $set: {
         'verification.status': 'queued', 'verification.requestId': newId('req'), 'verification.requestedScope': config.verify.requestedScope,
-        'verification.attempts': 0, 'verification.lastError': null, 'verification.lastErrorClass': null, 'dispatch.verify': true,
+        'verification.attempts': 0, 'verification.lastError': null, 'verification.lastErrorClass': null, 'verification.activeJob': null, 'dispatch.verify': true,
         'manual.status': 'none', 'manual.assignee': null, 'manual.assigneeName': null, 'manual.leaseExpiresAt': null, 'manual.handoffReason': null,
         'approval.authority': 'none', 'approval.scope': 'none', 'approval.changeId': null, 'publish.status': 'not_ready', 'dispatch.publish': false,
         resolvedSource: null, status: 'pending', assignedTo: null,

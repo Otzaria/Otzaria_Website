@@ -97,6 +97,10 @@ const ErrorReportSchema = new mongoose.Schema({
     message: String,
     authorityExceeded: Boolean,
     completedAt: Date,
+    // המשימה הפעילה (worker.js): מזהה המשימה, ה-fence של התפיסה הנוכחית ותוקף ה-lease שלה (לעולם לא מאוחר מזה
+    // שבמשימה). כל כתיבת החלטה מותנית בו — fence זהה ו-lease בתוקף ברגע הכתיבה; ביטול, השהיה, מתנדב או מעבר לידני
+    // מנקים אותו באותו עדכון אטומי.
+    activeJob: { type: { id: mongoose.Schema.Types.ObjectId, fence: Number, leaseExpiresAt: Date, _id: false }, default: undefined },
   },
   approval: {
     authority: { type: String, enum: APPROVAL_AUTHORITY },

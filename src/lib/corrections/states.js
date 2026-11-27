@@ -55,4 +55,10 @@ export const HANDOFF_REASON_LABELS = {
   claim_expired: 'תוקף השיוך פג',
   final_state: 'הדיווח כבר סגור',
   manual_active: 'מתנדב כבר מטפל',
+  // מצב משיכה (CONTRACT §3.7)
+  agent_not_configured: 'שירות הבדיקה (משיכה) אינו מוגדר',
+  agent_misconfigured: 'הגדרת שירות הבדיקה (משיכה) שגויה',
+  lease_expired_repeatedly: 'שירות הבדיקה איבד את המשימה שוב ושוב (קריסה או ניתוק)',
+  prepare_failed: 'תקלה פנימית בהכנת הבדיקה האוטומטית',
+  result_apply_failed: 'תקלה פנימית ביישום תשובת שירות הבדיקה',
 };

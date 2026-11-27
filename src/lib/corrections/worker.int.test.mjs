@@ -455,3 +455,96 @@ test('health: worker מושהה (שבת) כשיש עבודה ממתינה אינ
   assert.equal(h.healthy, false);
   assert.ok(h.problems.includes('worker_paused'));
 });
+
+test('[T23] "כבר הוחל" מדויק: השורה המדווחת כבר זהה לשורה המוצעת → נסגר אוטומטית, בלי שירות ובלי קומיט', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE.replace(LINE, NEW) } });
+  const r = await ingest('t23-applied', cfg());
+  const verify = createMockVerifyFetch(() => ({ status: 500 }));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  assert.equal(verify.calls.length, 0, 'לא נשלח לשירות');
+  const s = await load(r._id);
+  assert.equal(s.state, 'closed_already_fixed');
+  assert.equal(s.status, 'resolved', 'הסטטוס הישן מסונכרן');
+  assert.equal(s.publish.status, 'skipped_already_fixed');
+  assert.equal(s.closeReason, 'source_already_applied');
+  assert.equal(s.manual.status, 'none');
+  assert.deepEqual([s.decisions[0].source, s.decisions[0].decision], ['system', 'already_fixed']);
+  assert.ok(deriveLabels(s).some((l) => l.text === 'כבר תוקן במקור'));
+  assert.equal((await CorrectionJob.findOne({ report: r._id }).lean()).outcome, 'resolve_already_applied');
+  assert.equal(gh.calls.filter((x) => x.method !== 'GET').length, 0);
+});
+
+test('[T23] "כבר הוחל" לא מדויק נשאר ידני כמו קודם: השורה המדווחת השתנתה אחרת → source_changed', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE.replace(LINE, `${NEW} נוסף`) } });
+  const r = await ingest('t23-changed', cfg());
+  const verify = createMockVerifyFetch(() => ({ status: 500 }));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  assert.equal(verify.calls.length, 0);
+  const s = await load(r._id);
+  assert.equal(s.state, 'open');
+  assert.equal(s.manual.handoffReason, 'source_changed');
+});
+
+// ביקורת PR #313: מקרים שבמבט על האינדקס המדווח בלבד נראים "כבר הוחל", אבל הטעות עדיין בקובץ.
+const fileOf = (arr) => `${arr.join('\n')}\n`;
+const fullLineCorrection = (lineIndex, original, proposed) => ({
+  location: { line_index: lineIndex, library_build_id: '27' },
+  correction: { original_line: original, original_selection: null, selection_offset: null, proposed_text: proposed, context_before: '', context_after: '' },
+});
+const SHIFTED_HEADINGS = (last) => fileOf([
+  '<h1>ספר בדיקה</h1>', 'הקדמה 1', 'הקדמה 2', 'הקדמה 3', 'הקדמה 4', 'הקדמה 5',
+  '<h2>סימן א</h2>', '<h3>סעיף א</h3>', 'טקסט א-א', '<h3>סעיף ב</h3>', 'טקסט א-ב',
+  '<h2>סימן ב</h2>', '<h3>סעיף א</h3>', 'טקסט ב-א', last, 'טקסט ב-ב',
+]);
+const FALSE_ALREADY_APPLIED = [
+  ['A: כותרת קצרה שחוזרת, והשגיאה זזה 5 שורות ולא תוקנה', SHIFTED_HEADINGS('<h3>סעיף ג</h3>'), [9, '<h3>סעיף ג</h3>', '<h3>סעיף ב</h3>']],
+  ['A2: כמו A, והשגיאה שונתה אחרת (סעיף ד)', SHIFTED_HEADINGS('<h3>סעיף ד</h3>'), [9, '<h3>סעיף ג</h3>', '<h3>סעיף ב</h3>']],
+  ['B: מחיקה, ושורה ריקה נכנסה לאינדקס לפני שורת הזבל', fileOf(['<h1>ספר בדיקה</h1>', 'פסקה ראשונה', 'פסקה שנייה', '', 'שורת זבל שצריך למחוק', 'פסקה שלישית']), [3, 'שורת זבל שצריך למחוק', '']],
+];
+
+for (const [i, [name, file, [lineIndex, original, proposed]]] of FALSE_ALREADY_APPLIED.entries()) {
+  test(`[T23] "כבר הוחל" במבט על האינדקס בלבד — ${name} → ידני, לא נסגר`, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: file } });
+    const r = await ingest(`t23-false-${i}`, cfg(), fullLineCorrection(lineIndex, original, proposed));
+    const verify = createMockVerifyFetch(() => ({ status: 500 }));
+    await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+    const s = await load(r._id);
+    assert.equal(s.state, 'open');
+    assert.equal(s.manual.status, 'queued');
+    assert.equal(s.manual.handoffReason, 'already_fixed_unverified');
+    assert.ok(deriveLabels(s).some((l) => l.text === 'נראה שכבר תוקן במקור'));
+    assert.equal(verify.calls.length, 0);
+  });
+}
+
+test('[T23] "כבר הוחל" אמיתי: שורה ארוכה, המקורית אינה בקובץ והמוצעת מופיעה פעם אחת → נסגר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const file = fileOf(['<h1>ספר בדיקה</h1>', 'פסקה ראשונה ארוכה עם תיקון שכבר הוחל', 'פסקה שנייה']);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: file } });
+  const r = await ingest('t23-true', cfg(), fullLineCorrection(1, 'פסקה ראשונה ארוכה עם טעות', 'פסקה ראשונה ארוכה עם תיקון שכבר הוחל'));
+  await run(cfg(), { verifyFetch: createMockVerifyFetch(() => ({ status: 500 })), githubFetch: gh.fetch }, T0);
+  assert.equal((await load(r._id)).state, 'closed_already_fixed');
+});
+
+test('[T23] "כבר הוחל" שנסגר אוטומטית — המדווח מקבל את אותה הודעה כמו בסגירת מתנדב, פעם אחת ולפי ההסרה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const file = fileOf(['<h1>ספר בדיקה</h1>', 'פסקה ראשונה ארוכה עם תיקון שכבר הוחל', 'פסקה שנייה']);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: file } });
+  const mails = [];
+  const sendThanksMail = async (m) => { mails.push(m); return { sent: true }; };
+  const r = await ingest('t23-mail', cfg(), { ...fullLineCorrection(1, 'פסקה ראשונה ארוכה עם טעות', 'פסקה ראשונה ארוכה עם תיקון שכבר הוחל'), sender_email: 'reporter@example.org' });
+  const verify = createMockVerifyFetch(() => ({ status: 500 }));
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch, sendThanksMail }, T0);
+  assert.equal((await load(r._id)).state, 'closed_already_fixed');
+  assert.deepEqual(mails.map((m) => [m.to, m.kind]), [['reporter@example.org', 'already_fixed']]);
+  assert.ok((await load(r._id)).reporterThanks.sentAt);
+  // מדווח שביקש להסיר — אין מייל
+  await ErrorReport.updateOne({ _id: r._id }, { $set: { reporterUnsubscribed: true } });
+  const r2 = await ingest('t23-mail-2', cfg(), { ...fullLineCorrection(1, 'פסקה ראשונה ארוכה עם טעות', 'פסקה ראשונה ארוכה עם תיקון שכבר הוחל'), sender_email: 'reporter@example.org' });
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch, sendThanksMail }, at(60));
+  assert.equal((await load(r2._id)).state, 'closed_already_fixed');
+  assert.equal(mails.length, 1);
+});

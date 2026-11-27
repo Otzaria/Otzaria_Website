@@ -6,6 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LOCATE, applySpans, canon, canonTokens, lineIndex, locateEdit, locateTarget } from './locate-edit.js';
 import { ABSORPTION, evaluateAbsorption } from './absorption.js';
+import { matchLine } from './resolver.js';
+import { isExactlyApplied, isDistinctiveLine } from './already-applied.js';
 import { resolveRebased } from './publisher.js';
 
 const PARA = 'ובגמרא שם אמר רבי יוחנן הלכא כרבי מאיר בגזירה ובנמצא, ושם מבואר בדברי הראשונים';
@@ -501,6 +503,7 @@ function scenario(seed, { reshape = false, raw = false } = {}) {
   })();
   return {
     kind, mode, truth: truthOf(main), open: anchoredOpen(main), truthIfWritten, benign, li, original: render(P), proposed: render(fixedP), baseTexts: base.map(render), mainTexts: main.map(render),
+    mainDesc: main.map(isDesc), // אילו שורות בקובץ הנוכחי הן עותקים (או חלקים) של הפסקה המדווחת
     raw: Boolean(rawPart), rawTruth,
   };
 }
@@ -555,6 +558,61 @@ test(`תכונה: נסגר ⇒ הטעות בפסקה המדווחת תוקנה (
   assert.deepEqual(bad.slice(0, 10), [], `הפרות: ${bad.length}`);
   // הזיהוי אינו "תמיד ספק": רוב התיקונים האמיתיים מזוהים (משני לאינווריאנט)
   assert.ok(stats.located / stats.trulyFixed > 0.5, JSON.stringify(stats));
+});
+
+/** כמו resolveSource / verifyLocallyAlreadyFixed: matchLine על הקובץ במקום המדווח, ואז הכלל של already-applied.js. */
+function alreadyFixedVerdict(texts, s) {
+  const m = matchLine(`${texts.join('\n')}\n`, { originalLine: s.original, lineIndex: s.li, newLine: s.proposed });
+  const rev = { originalLine: s.original, originalSelection: null, proposedText: s.proposed, contextBefore: '', contextAfter: '' };
+  // הכלל הקודם (המחמיר בלבד, בלי האיתור) — לבדיקה שהמחולל אכן תופס אותו
+  const legacy = m.status === 'already_applied' && m.occurrences.original === 0 && m.occurrences.proposed === 1 && isDistinctiveLine(m.currentLine);
+  return { closed: isExactlyApplied({ ...m, bomAdjusted: false }, rev), legacy, status: m.status, located: m.located };
+}
+
+test(`תכונה ("כבר תוקן"): נסגר ⇒ במקום המדווח עותק מתוקן של הפסקה המדווחת, והטעות איננה באף עותק (${PROPERTY_SCENARIOS} תרחישים, seed קבוע)`, (t) => {
+  const stats = { scenarios: 0, appliedAtIndex: 0, fixedCopyAtIndex: 0, closed: 0, planted: 0, plantedClosed: 0, plantedTrulyFixed: 0, violations: 0, legacyViolations: 0 };
+  const bad = [];
+  const blocked = {};
+  for (let seed = 1; seed <= PROPERTY_SCENARIOS; seed++) {
+    const s = scenario(seed);
+    stats.scenarios += 1;
+    // א. התרחיש כפי שנוצר: המקום המדווח הוא מקום הפסקה בבסיס.
+    const v = alreadyFixedVerdict(s.mainTexts, s);
+    const fixedCopy = s.truth && s.mainDesc[s.li];
+    if (v.status === 'already_applied') {
+      stats.appliedAtIndex += 1;
+      if (fixedCopy) {
+        stats.fixedCopyAtIndex += 1;
+        if (!v.closed) blocked[v.located.reason] = (blocked[v.located.reason] || 0) + 1;
+      }
+    }
+    if (v.closed) {
+      stats.closed += 1;
+      if (!fixedCopy) bad.push({ seed, variant: 'natural', kind: s.kind, mode: s.mode, truth: s.truth, desc: s.mainDesc[s.li] });
+    }
+    if (v.legacy && !fixedCopy) stats.legacyViolations += 1;
+    // ב. אדוורסרי (הביקורת): שורה זרה הזהה בדיוק להצעה נשתלת במקום המדווח והשאר זז. מה שבמקום אינו ניתן להבחנה
+    // מעותק מתוקן — ולכן הדרישה: נסגר רק כשהטעות תוקנה בכל עותקי הפסקה המדווחת.
+    if (s.mainTexts[s.li] !== s.proposed) {
+      stats.planted += 1;
+      if (s.truth) stats.plantedTrulyFixed += 1;
+      const p = alreadyFixedVerdict([...s.mainTexts.slice(0, s.li), s.proposed, ...s.mainTexts.slice(s.li)], s);
+      if (p.closed) {
+        stats.plantedClosed += 1;
+        if (!s.truth) bad.push({ seed, variant: 'planted', kind: s.kind, mode: s.mode, reason: p.located?.reason });
+      }
+      if (p.legacy && !s.truth) stats.legacyViolations += 1;
+    }
+  }
+  stats.violations = bad.length;
+  t.diagnostic(`already-fixed property: ${JSON.stringify(stats)}`);
+  t.diagnostic(`already-fixed: עותק מתוקן במקום המדווח שלא נסגר, לפי סיבת האיתור: ${JSON.stringify(blocked)}`);
+  assert.deepEqual(bad.slice(0, 10), [], `הפרות: ${bad.length}`);
+  // המחולל תופס את הכלל הקודם (המחמיר בלבד) — אותו כשל שהביקורת שחזרה
+  assert.ok(stats.legacyViolations > 0, JSON.stringify(stats));
+  // הכלל אינו "תמיד ידני": רוב העותקים המתוקנים שבמקום המדווח נסגרים, חוץ משורות קצרות שבלי שכנים מהבסיס לעולם
+  // אינן מזוהות (משני לאינווריאנט)
+  assert.ok(stats.closed / (stats.fixedCopyAtIndex - (blocked.short_no_context || 0)) > 0.5, JSON.stringify(stats));
 });
 
 test(`תכונה (הביקורת — הזזה ועיצוב מחדש, פיתיונות): נסגר ⇒ אין טעות פתוחה; יעד לכתיבה ⇒ הכתיבה בו מתקנת (${PROPERTY_SCENARIOS} תרחישים)`, (t) => {
@@ -625,7 +683,7 @@ test(`תכונה (הביקורת — הזזה ועיצוב מחדש, פיתיו�
 // שתיהן או אף אחת. "כבר תוקן" במפרסם (resolveRebased — הקובץ השתנה מאז הבסיס) ו"נקלט" ב-PR שנסגר ⇒ גם השינוי הגולמי
 // שאושר נמצא בכל עותקי הפסקה המדווחת (ובנוסף — כמו קודם — הטעות תוקנה). זוגי: עם הזזה ועיצוב מחדש.
 test(`תכונה (הביקורת הרביעית — ההצעה משנה גם תגיות): "כבר תוקן" ו"נקלט" ⇒ כל השינוי הגולמי שאושר נקלט (${PROPERTY_SCENARIOS} תרחישים)`, (t) => {
-  const stats = { scenarios: 0, rawTaken: 0, wordOnly: 0, alreadyFixed: 0, absorbed: 0, publisherViolations: 0, absorbViolations: 0 };
+  const stats = { scenarios: 0, rawTaken: 0, wordOnly: 0, alreadyFixed: 0, absorbed: 0, autoClosed: 0, publisherViolations: 0, absorbViolations: 0, autoCloseViolations: 0 };
   const bad = [];
   for (let seed = 1; seed <= PROPERTY_SCENARIOS; seed++) {
     const reshape = seed % 2 === 0;
@@ -650,9 +708,24 @@ test(`תכונה (הביקורת הרביעית — ההצעה משנה גם ת�
         bad.push({ seed, by: 'absorption', kind: s.kind, mode: s.mode, detail: v.detail, truth: s.truth, rawTruth: s.rawTruth });
       }
     }
+    // "כבר הוחל" (already-applied.js, הסגירה האוטומטית לפני השירות) — אותו אינווריאנט, כמו בתכונה של "כבר תוקן":
+    // המקום המדווח כפי שנוצר, ופיתיון זהה להצעה שנשתל בו (שם גם עותק שבו המילה תוקנה והתגית לא נראה, בנרמול, כמתוקן).
+    if (!reshape) {
+      const nat = alreadyFixedVerdict(s.mainTexts, s);
+      const variants = [['natural', nat, s.truth && s.mainDesc[s.li]]];
+      if (s.mainTexts[s.li] !== s.proposed) variants.push(['planted', alreadyFixedVerdict([...s.mainTexts.slice(0, s.li), s.proposed, ...s.mainTexts.slice(s.li)], s), s.truth]);
+      for (const [variant, verdict, fixedCopy] of variants) {
+        if (!verdict.closed) continue;
+        stats.autoClosed += 1;
+        if (!(fixedCopy && s.rawTruth)) {
+          stats.autoCloseViolations += 1;
+          bad.push({ seed, by: 'already-applied', variant, kind: s.kind, mode: s.mode, truth: s.truth, rawTruth: s.rawTruth });
+        }
+      }
+    }
   }
   t.diagnostic(`raw: ${JSON.stringify(stats)}`);
   assert.deepEqual(bad.slice(0, 10), [], `הפרות: ${bad.length}`);
   // משני לאינווריאנט: הכלל אינו "תמיד ידני" — תיקונים שנקלטו במלואם עדיין נסגרים
-  assert.ok(stats.alreadyFixed > 0 && stats.absorbed > 0, JSON.stringify(stats));
+  assert.ok(stats.alreadyFixed > 0 && stats.absorbed > 0 && stats.autoClosed > 0, JSON.stringify(stats));
 });

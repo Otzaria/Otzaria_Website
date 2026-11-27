@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import VerifyAgentPanel from '@/components/corrections/VerifyAgentPanel'
 import { canConfigureCorrections } from '@/lib/roles'
 
 const PROBLEMS = {
@@ -12,6 +13,7 @@ const PROBLEMS = {
   publish_unknown_pending: 'יש ניסיונות פרסום בתוצאה לא ידועה (ממתינים ל-reconciliation)',
   config_errors: 'יש שגיאות בהגדרות',
   legacy_not_migrated: 'יש דיווחים ישנים שלא עברו migration ואינם מוצגים — יש להריץ scripts/migrate-corrections.mjs --apply',
+  agent_not_seen: 'שירות הבדיקה (משיכה) לא פנה לאתר זמן רב ויש משימות בדיקה ממתינות',
 }
 const COUNTS = {
   open: 'פתוחים', legacyNotMigrated: 'ישנים שלא עברו migration', manualQueued: 'בתור הידני', claimed: 'בטיפול',
@@ -117,9 +119,11 @@ export default function CorrectionsAdminPage() {
         </div>
       </section>
 
+      <VerifyAgentPanel verifyAgent={health.verifyAgent} fmtAge={fmtAge} />
+
       <section className="glass rounded-xl p-4 space-y-2 text-sm">
         <h2 className="font-bold text-base">הגדרות שירות הבדיקה (מוגדרות בשרת, לקריאה בלבד)</h2>
-        <div>שירות הבדיקה: <b>{cfg.verify.enabled ? `פעיל (${cfg.verify.urlHost})` : `כבוי — ${cfg.verify.disabledReason}`}</b>{cfg.verify.isMock ? ' · שרת דמה' : ''}</div>
+        <div>שירות הבדיקה: <b>{cfg.verify.enabled ? `פעיל (${cfg.verify.transport === 'pull' ? `משיכה · ${cfg.verify.agentId}` : cfg.verify.urlHost})` : `כבוי — ${cfg.verify.disabledReason}`}</b>{cfg.verify.isMock ? ' · שרת דמה' : ''}</div>
         <div>סמכות השירות: <b>{cfg.verify.authority}</b> · היקף מבוקש: <b>{cfg.verify.requestedScope}</b> · דחייה אוטומטית: <b>{cfg.verify.autoRejectAllowed ? 'מותרת' : 'לא'}</b></div>
         <div>יעד הפרסום: <span dir="ltr">{cfg.publish.repo}@{cfg.publish.branch}</span> · טוקן: <b>{cfg.publish.tokenConfigured ? 'מוגדר' : 'חסר'}</b></div>
         <div>מקור לקריאה: <span dir="ltr">{cfg.source.repo}@{cfg.source.ref}</span></div>

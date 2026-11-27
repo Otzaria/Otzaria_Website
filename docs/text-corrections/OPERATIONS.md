@@ -10,7 +10,8 @@
                                                  │
             worker (/api/cron/corrections-worker: מיד אחרי דיווח/אישור, ו-cron כל 10 דקות כרשת ביטחון)
                  ├─ outbox → CorrectionJob (verify / publish)
-                 ├─ verify: resolver (GitHub, קריאה בלבד) → שירות הבדיקה → ניתוב לפי מדיניות
+                 ├─ verify (דחיפה): resolver (GitHub, קריאה בלבד) → שירות הבדיקה → ניתוב לפי מדיניות
+                 ├─ verify (משיכה): מטאטא בלבד — השירות תופס בעצמו (/api/worker/v1/corrections, §3.4)
                  ├─ publish: PR מבודד או קומיט ישיר ליעד הקבוע בקוד → reconciliation → מעקב מיזוג
                  └─ heartbeat (WorkerHeartbeat)
 מתנדבים ── /library/corrections ── /api/corrections/* (הרשאה נבדקת בשרת בכל פעולה)
@@ -27,7 +28,7 @@
 | digest | `src/lib/corrections/ocj1.js` (מאומת מול `fixtures/digest_fixtures.json`) |
 | הגדרות | `src/lib/corrections/config.js`, `runtime.js` |
 | תור ו-worker | `src/lib/corrections/worker.js`, `src/models/CorrectionJob.js` |
-| שירות הבדיקה | `verify-client.js`, `verify-protocol.js`, `classify.js` |
+| שירות הבדיקה | `verify-client.js`, `verify-protocol.js`, `classify.js`; משיכה: `agent.js`, `agent-auth.js`, `src/app/api/worker/v1/corrections/**` |
 | איתור מקור | `resolver.js`, `git-source.js`, `source-text.js` |
 | פרסום | `publisher.js` מעל `src/lib/dicta/github-api.js` (`createRepoClient`) |
 | PR שנסגר בלי מיזוג | `absorption.js` (הכלל, טהור), `closed-pr.js` (קריאת main ומעבר מותנה) |
@@ -91,6 +92,9 @@
 | `CORRECTIONS_VERIFY_REQUESTED_SCOPE` | מה מבקשים מהשירות (לא יותר מהסמכות) |
 | `CORRECTIONS_VERIFY_AUTO_REJECT` | האם `rejected` מהשירות סוגר אוטומטית |
 | `CORRECTIONS_VERIFY_MOCK` | הכתובת היא שרת דמה (אסור בייצור) |
+| `CORRECTIONS_VERIFY_TRANSPORT` | `push` (ברירת המחדל — האתר פונה ל-`_URL`) או `pull` (השירות מושך משימות; §3.4). ערך אחר = השירות כבוי |
+| `CORRECTIONS_AGENT_SECRET` + `CORRECTIONS_AGENT_ID` | במשיכה בלבד: Bearer של הסוכן (חזק, ושונה מכל סוד אחר בשרת) והמזהה שלו (`X-Agent-Id`). במשיכה אין צורך ב-`_URL`/`_SECRET` |
+| `CORRECTIONS_VERIFY_DEADLINE_HOURS` | במשיכה בלבד: מועד המיצוי בשעות שאינן שבת/יו"ט (ברירת מחדל 24, טווח 1–168) |
 
 ### 3.3 קבוע בקוד (`src/lib/corrections/config.js`)
 
@@ -111,6 +115,66 @@
 - חוסר בסוד/כתובת/הגדרה = השירות כבוי עם סיבה מפורשת → כל דיווח לידני, בלי ניסיונות.
 - יעד הפרסום אינו מגיע לעולם מהבקשה, מהתוכנה או מהשירות. הנתיב בקובץ נבדק מול שורשי הספרים
   (`isAllowedRepoPath`) — אין כתיבה ל-`.github/` או מחוץ ל-`<מקור>/ספרים/אוצריא/`.
+
+### 3.4 מצב משיכה (`CORRECTIONS_VERIFY_TRANSPORT=pull`)
+
+שירות הבדיקה (`OtzariaVerifyAgent` במחשב המקומי, מאחורי NAT) מושך משימות מ-`/api/worker/v1/corrections`
+(החוזה: CONTRACT §3.7). האצווה של האתר **אינה** פונה לשירות במצב הזה — היא יוצרת משימות מה-outbox,
+מטאטאת משימות שעבר מועדן ומפרסמת. ההכנה (איתור המקור ובניית הבקשה), האימות והניתוב הם אותו קוד כמו בדחיפה.
+
+- **בטיחות:** `CORRECTIONS_AGENT_SECRET` חייב להיות חזק — ≥43 תווים מודפסים או hex/base64 של ≥32 בתים, ובנוסף ≥10
+  תווים שונים, אנטרופיה משוערת ≥128 ביט ובלי תבנית חוזרת (מייצרים אקראית, למשל `openssl rand -base64 32`) — ושונה
+  מכל סוד אחר בשרת (`CRON_SECRET`, `OCR_WORKER_SECRET`, `CORRECTIONS_VERIFY_SECRET`, `DICTA_LIBRARY_GITHUB_TOKEN`,
+  `NEXTAUTH_SECRET` ועוד). `CORRECTIONS_AGENT_ID` בתבנית `[A-Za-z0-9._-]{1,64}`. חסר → `agent_not_configured`; לא תקין
+  → `agent_misconfigured` (עם שגיאה בדף הבריאות). בשני המקרים השירות כבוי, כל דיווח לידני, וה-API עונה
+  `403 agent_api_disabled`. גם במצב `push` ה-API סגור (403). כללי הייצור של §3.3 (mock, סמכות) חלים כמו בדחיפה.
+  דחיות אימות נרשמות ביומן פעם אחת לכל קוד בדקה, עם מספר הדחיות שנבלעו.
+- **קבועים** (`config.js`): `AGENT_LEASE_SECONDS` (600), `AGENT_MAX_LEASE_EXPIRIES` (5), `AGENT_IDLE_RETRY_SECONDS`
+  (60 — `Retry-After` כשאין עבודה), `AGENT_BUSY_RETRY_SECONDS` (5 — כשנגמר תקציב התפיסה או שהסריקה דילגה על כל
+  המשימות שבדקה), `AGENT_DISABLED_RETRY_SECONDS` (300 — כשהבדיקה כבויה/מושהית), `AGENT_CLAIM_SCAN` (10 משימות לכל
+  תפיסה לכל היותר), `AGENT_CLAIM_BUDGET_MS` (20 שניות לתפיסה), `AGENT_BATCH_INTERVAL_SECONDS` (600 — ראו "בלי cron"),
+  `AGENT_MAX_RESULT_BYTES` (1MiB), `AGENT_STALE_SECONDS` (1800 — דף הבריאות).
+- **מועד מיצוי:** `CORRECTIONS_VERIFY_DEADLINE_HOURS` (ברירת מחדל 24, טווח 1–168; מחוץ לטווח נחתך ומדווח) שעות שנספרות
+  רק מחוץ לחלונות המנוחה (`verifyDeadline` מעל `src/lib/pageProof/lease.js`: מיום שישי/ערב חג ב-12:00 עד מוצאי שבת/חג
+  ב-22:00) — דיווח אינו פג בגלל שבת. בדחיפה המועד נשאר `VERIFY_MAX_TOTAL_SECONDS` בזמן שעון, כמו קודם.
+- **שבת ויו"ט:** כל ראוט של הסוכן בודק את אותם חלונות מנוחה בעצמו — אופליין, לפני האימות, ונכשל-סגור (`503 shabbat`).
+  התפיסה אינה מוסרת משימה שה-lease שלה היה נגמר בתוך חלון, ודופק כזה מחזיר את המשימה לתור עד סוף החלון, בלי קנס.
+- **מטאטא:** באצווה ובתחילת כל תפיסה — משימה שעבר מועדה ואינה מוחזקת ב-lease בתוקף עוברת לידני
+  (`deadline_exhausted`). משימה שהשירות מחזיק אינה נלקחת ממנו; הדופק הבא שלה מבטל אותה.
+- **ניסיונות ופקיעות:** תפיסה מחדש של משימה שה-lease שלה פג נספרת (`CorrectionJob.leaseExpiries`); בפקיעה החמישית —
+  ידני עם `lease_expired_repeatedly` (תווית "מוצו הניסיונות"). **אינם נספרים:** `release` של השירות, "אין משאבים"
+  (`service_capacity`, רק מועד המיצוי מגביל), ביטול מצד האתר (מתנדב לקח, הדיווח השתנה, השהיה — המשימה מבוטלת מיד),
+  וחלון מנוחה.
+- **חריגות:** דיווח שההכנה שלו נכשלת בחריגה עובר לידני (`prepare_failed`) והתפיסה ממשיכה; חריגה ביישום תוצאה מעבירה
+  לידני (`result_apply_failed`) ועונה `409 apply_failed` — אין משימה שנשארת נעולה.
+- **החלטה רק מה-lease החדש והתקף** (גם בדחיפה): סימון המשימה בדיווח (`verification.activeJob`) נושא את ה-fence ואת
+  תוקף ה-lease. כל תפיסה שומרת קודם את ה-fence הבא בסימון ורק אז מקצה את המשימה, והקישור אינו מוריד fence לעולם — כך
+  שמרגע שהוקצה lease חדש, החלטה (או סימון) של תפיסה קודמת אינה נכתבת, גם אם התעכבה בדרך למסד. דופק, תוצאה ו-worker
+  בדחיפה (לפני ההכנה ולפני הקריאה לשירות) מאריכים קודם את המשימה ואחר כך את הסימון, כך שהתוקף בסימון אינו מאוחר משל
+  המשימה; וכתיבת החלטה דורשת שהתוקף עוד לפניה בלפחות 30 שניות (`LEASE_WRITE_MARGIN_MS`) לפי השעון ממש לפני הכתיבה —
+  גם אחרי הצעדים האיטיים שלפניה (אימות מקומי, יצירת חבילת השינוי) — ואותו תנאי גם בשעון המסד (`$$NOW`) ברגע שהכתיבה
+  מתבצעת בפועל: כתיבה שהתעכבה בדרך (המתנה לחיבור פנוי, רשת, מסד עמוס) עד אחרי הפקיעה אינה נוחתת גם בלי תפיסה מתחרה
+  (הביקורת החמישית). התשובה השמורה לשליחה חוזרת שייכת לתפיסה ששמרה אותה (מותנית ב-fence): מחזיק ישן ששלח בדיוק אותו
+  גוף אינו דורס את התשובה של המחזיק החדש. החלטה שהתעכבה מעבר ל-lease נשמרת לתיעוד בלבד
+  (`cancelled`), החבילה שנוצרה לה נמחקת ואין פרסום, והמשימה נתפסת מחדש. המקור שאותר בהכנה (`resolvedSource`) שייך
+  לתפיסה ששלחה אותו: הכתיבה שלו מותנית בסימון של אותה תפיסה, כך שהכנה ישנה שהתעכבה אינה דורסת את המקור שתפיסה חדשה
+  כבר שלחה (והתוצאה שלה נבדקת מולו). דופק שהסימון שלו כבר אינו של התפיסה
+  עונה `cancelled` ומחזיר את המשימה לתור מיד (`verify_released`, `marker_lost`). סימון ישן בלי תוקף (מלפני השינוי)
+  נכשל-סגור עד שהדופק או התוצאה של המחזיק מאריכים אותו.
+- **בלי cron:** התפיסה יוצרת משימות מה-outbox, מריצה את המטאטא, ומריצה אצווה מלאה אחרי התשובה כשיש פרסום ממתין או
+  כשלא רצה אצווה `AGENT_BATCH_INTERVAL_SECONDS` — כך גם פרסום, ניסיונות חוזרים ומעקב PR מתקדמים כל עוד השירות פונה.
+  אישור שמותר לפרסום מריץ אצווה מיד אחרי התוצאה, ובקשת אצווה בזמן שאצווה רצה אינה הולכת לאיבוד (האצווה חוזרת
+  בסיומה). ה-cron של §4 עדיין מומלץ, כדי שהאצוות ימשיכו גם כשהשירות אינו פונה.
+- **"כבר הוחל" בוודאות** (בשני האופנים): הדיווח נסגר בלי שירות (`closed_already_fixed`, `closeReason=source_already_applied`,
+  החלטה `system`) רק כשבשורה המדווחת נמצאת בדיוק השורה המלאה המוצעת, השורה המקורית אינה מופיעה בשום מקום בקובץ,
+  והשורה המוצעת ייחודית (לא ריקה, לא כותרת או תגיות בלבד, ≥15 תווים נראים, מופיעה בקובץ פעם אחת); וכשההצעה משנה גם
+  תגיות — אין בקובץ עותק שבו המילה תוקנה ושינוי התגיות לא (`rawPartHeld`, כמו במפרסם וב"נקלט"). המדווח מקבל את
+  אותה הודעה כמו בסגירת "כבר תוקן" של מתנדב (פעם אחת, לפי ההסרה). כל מקרה אחר — ידני כמו קודם
+  (`already_fixed_unverified`). הכלל נבדק מול 1,789 דיווחים היסטוריים: 15 סגירות, 0 שגויות. אותו כלל חל על
+  `already_fixed` של השירות (מול הקובץ ב-HEAD בזמן התוצאה), ותוצאה שמגיעה בזמן השהיה אינה מוחלת (`cancelled`).
+- **רשת ביטחון:** המטאטא (ובדחיפה — האצווה) מחזיר ל-outbox דיווח "ממתין לבדיקה" בלי משימה פעילה של ה-generation
+  שלו (אירוע `verify_requeued`); כל מעבר של משימה/דיווח מותנה ב-fence וב-generation שקרא, כך שמעבר מגרסה ישנה
+  אינו נוגע במשימה או במצב של גרסה חדשה.
 
 ## 4. ה-worker
 
@@ -139,7 +203,8 @@
 - **עמידות**: כל המצב ב-MongoDB. אין `setTimeout`/זיכרון/Promise אחרי תשובה. restart של האתר
   לא מאבד עבודה.
 - **תפיסה**: `findOneAndUpdate` אטומי; lease (`JOB_LEASE_SECONDS`, 120; פרסום ×5)
-  עם fence שעולה בכל תפיסה. worker שה-lease שלו פג ומנסה לסיים — נכשל בשקט.
+  עם fence שעולה בכל תפיסה. worker שה-lease שלו פג ומנסה לסיים — נכשל בשקט. משימת בדיקה: ה-fence נשמר קודם בסימון
+  שבדיווח, וה-lease מוארך לפני ההכנה ולפני הקריאה לשירות (§3.4, "החלטה רק מה-lease החדש והתקף").
 - **משימה פעילה יחידה** לכל פעולה/דיווח: אינדקס ייחודי על `activeKey`.
 - **מקביליות**: `WORKER_BATCH_SIZE` (10) משימות לאצווה, `WORKER_CONCURRENCY` (2) במקביל;
   אותו תהליך לא מריץ שתי אצוות במקביל. כמה תהליכים/שרתים במקביל — בטוח.
@@ -328,6 +393,13 @@
 `healthy=false` כאשר: אין דופק טרי (`HEARTBEAT_STALE_SECONDS`, 300) ויש עבודה ממתינה; האצווה
 האחרונה נכשלה; יש פרסום בתוצאה לא ידועה; יש שגיאות הגדרה.
 
+`verifyAgent` בתשובה (והחלונית "שירות הבדיקה — העברה ומשימות" בדף): אופן ההעברה (`push`/`pull`), במשיכה — מזהה
+הסוכן, גרסתו (`X-Agent-Version`) ו"נראה לאחרונה" (`CorrectionsAgentState`, מתעדכן בכל קריאה מאומתת ל-API), ומשימות
+הבדיקה לפי מצב (`pending`, `leased` ומהן `leaseExpired`, `done`, `failed`, `cancelled`). במשיכה, כשיש משימות ממתינות
+או בעבודה והסוכן לא פנה יותר מ-`AGENT_STALE_SECONDS` (30 דקות) — `agent_not_seen`. תפיסה או תוצאה של הסוכן בטווח
+`HEARTBEAT_STALE_SECONDS` נחשבות עבודת התור (`verifyAgent.workActive`, `lastWorkAt`), ולכן במשיכה בלי cron אין
+`worker_not_running` כל עוד הסוכן פעיל. כשהבדיקה כבויה החלונית מציגה "כבוי".
+
 ## 6. פעולות מפעיל
 
 | מצב | מה עושים |
@@ -344,6 +416,10 @@
 | 401/403 מ-GitHub | ל-`DICTA_LIBRARY_GITHUB_TOKEN` חסרה הרשאת contents+pull_requests. הקוד לא עוקף branch protection — יש להשתמש ב-`pr` |
 | מתנדב חדש | דף **ניהול ובריאות** → מתנדבי תיקונים → סימון "מתנדב" (מנהל ספרים/כללי). ההרשאה אינה נותנת גישה לפאנל הניהול |
 | דיווח תקוע בבדיקה | מתנדב לוקח אותו (הבדיקה נפסלת), או השהיית השירות |
+| `agent_not_seen` (משיכה) | שירות הבדיקה לא פונה לאתר: לבדוק שהשירות רץ במחשב המקומי, ושאין עבודת gpu עדיפה (בניית db/OCR) שמעכבת אותו. משימות שלא נלקחו תוך 24 שעות (בלי שבת/יו"ט) עוברות לידני מעצמן |
+| השירות מקבל `403 agent_api_disabled` | האתר במצב `push`, או ש-`CORRECTIONS_AGENT_SECRET`/`_ID` חסרים או לא תקינים (שגיאה בדף הבריאות) |
+| `lease_expired_repeatedly` | השירות איבד את אותה משימה חמש פעמים (קריסה/ניתוק): לבדוק את יומני השירות על הדיווח הזה. הדיווח בתור הידני כרגיל |
+| `prepare_failed` / `result_apply_failed` | חריגה פנימית באתר בהכנת הבדיקה או ביישום התשובה (בלוג: `[corrections-agent] ... failed job=<id>`). הדיווח בתור הידני; לבדוק את הלוג ואת הדיווח |
 
 ## 7. דיווחים שאינם נכנסים למערכת (`email_only`)
 
@@ -366,6 +442,12 @@
 4. **חיבור השירות** — `CORRECTIONS_VERIFY_ENABLED/URL/SECRET`, סמכות `technical_only`. כל אישור עדיין עובר למתנדב.
 5. **אוטומציה** — רק אחרי תקופת מעקב: `CORRECTIONS_VERIFY_AUTHORITY=technical_and_content`,
    `CORRECTIONS_VERIFY_REQUESTED_SCOPE=technical_and_content`, ו"פרסום אוטומטי" במסך הניהול (עדיין PR).
+6. **מצב משיכה** (במקום הכתובת של שלב 4, לשירות מאחורי NAT): `CORRECTIONS_VERIFY_TRANSPORT=pull`,
+   `CORRECTIONS_AGENT_SECRET` (חדש, לא הסוד של ה-OCR) ו-`CORRECTIONS_AGENT_ID` — אותם ערכים בשירות. סדר: לפרוס את
+   האתר עם המשתנים ו-`CORRECTIONS_VERIFY_ENABLED=0` (ה-API עונה 204 ותו לא), להתקין את השירות ולוודא בדף הבריאות שהוא
+   "נראה לאחרונה", ורק אז `CORRECTIONS_VERIFY_ENABLED=1`, עם סמכות `technical_only` כמו בשלב 4. חזרה לדחיפה:
+   `CORRECTIONS_VERIFY_TRANSPORT=push` (עם `_URL`/`_SECRET` של שלב 4) — משימה שהסוכן מחזיק נלקחת אחרי שה-lease
+   שלה פג, והסוכן מקבל 403.
 
 שלבים 1–3 שימושיים בלי 4–5.
 
@@ -436,6 +518,10 @@ node scripts/migrate-corrections.mjs --apply
 - **עצירת אוטומציה בלי rollback**: מדף הניהול — השהיית השירות ו/או `publishMode=disabled`
   (אישורים נשמרים כ"אושר וממתין לפרסום" ויפורסמו כשיופעל מחדש).
 - עצירת ה-worker: ביטול ה-cron. משימות פתוחות ממשיכות מאותו מקום בהרצה הבאה.
+- **מצב משיכה**: קוד ישן אינו מכיר את `CORRECTIONS_VERIFY_TRANSPORT` ופונה ל-`CORRECTIONS_VERIFY_URL` (שבמשיכה אינו
+  מוגדר → השירות כבוי, הכל לידני). השדות החדשים במשימה (`leaseTokenHash`, `leaseExpiries`, `resultSha256`,
+  `resultOutcome`, `resultReason`), ב-`resolvedSource` (`occurrences`) ואוסף `CorrectionsAgentState` נשארים ואינם מפריעים. עצירת המשיכה בלי rollback: השהיית השירות
+  מדף הניהול (התפיסה עונה 204, הדופק מחזיר `cancelled`, והממתינים עוברים לידני באצווה הבאה).
 
 ## 10. בדיקות
 
@@ -451,3 +537,19 @@ GitHub ושירות הבדיקה מדומים בבדיקות בלבד (`src/lib/
 MOCK_VERIFY_SECRET=dev node scripts/mock-verify-server.mjs
 # באתר: CORRECTIONS_VERIFY_ENABLED=1 CORRECTIONS_VERIFY_URL=http://127.0.0.1:4555 CORRECTIONS_VERIFY_SECRET=dev CORRECTIONS_VERIFY_MOCK=1
 ```
+
+סוכן דמה למצב משיכה (אסור בייצור; אותם משתני `CORRECTIONS_AGENT_*` כמו באתר, ונקרא גם `.env`):
+
+```bash
+# באתר: CORRECTIONS_VERIFY_ENABLED=1 CORRECTIONS_VERIFY_TRANSPORT=pull CORRECTIONS_AGENT_SECRET=<43+ תווים> CORRECTIONS_AGENT_ID=dev-agent
+MOCK_AGENT_DECISION=approved,needs_review node scripts/mock-verify-agent.mjs        # לולאה; --once = תפיסה אחת
+# MOCK_AGENT_MODE=abandon (תופס ולא עונה — פקיעות lease) | invalid (422) | capacity (service_capacity → retry)
+# MOCK_AGENT_WORK_SECONDS=150 — "עבודה" עם דופק כל 60 שניות; MOCK_AGENT_SITE (ברירת מחדל http://127.0.0.1:3000)
+```
+
+בדיקות מצב המשיכה: `src/lib/corrections/agent.int.test.mjs` (תפיסה, lease, דופק, release, כל מסלולי הניתוב, 409/422,
+פקיעות, מטאטא, השהיה, חריגות, תקציב תפיסה, שבת, בריאות בלי cron), `agent-auth.test.mjs` (הגדרות, סודות, מועד
+מיצוי), `rest-gate.test.mjs` (שער השבת), `already-applied.test.mjs` ו-[T23] ב-`worker.int.test.mjs` ("כבר הוחל" —
+כולל תרחישי הבקרה A, A2, B), `lease-race.int.test.mjs` (מירוצי lease: כל צעד של תפיסה, דופק ותוצאה נעצר לפני
+ביצועו, בשני הסדרים, כולל דחיפה וסימון בלי תוקף), `run-batch.test.mjs`, והראוטים עצמם — `src/app/api/worker/v1/corrections/routes.test.js`
+(vitest, מול MongoDB אמיתי).

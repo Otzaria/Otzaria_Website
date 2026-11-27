@@ -71,6 +71,7 @@ scripts/*
 !scripts/migrate-ocr-local.mjs
 !scripts/ocr-local-fake-worker.mjs
 !scripts/mock-verify-server.mjs
+!scripts/mock-verify-agent.mjs
 !scripts/page-proof-link-import.mjs
 !scripts/patch-plugin-validator.cjs
 # בדיקת התקנה ישנה של הוולידטור מול package-lock.json (pretest; npm run check:plugin-validator)
