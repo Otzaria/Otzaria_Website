@@ -9,6 +9,7 @@ import { DEFAULT_CATEGORY, bulkPlan, bulkResultText, bulkUndoText, deleteBookDia
 import { deleteBook, downloadBookPdf, downloadBookText, updateBook } from './booksApi'
 import { libraryHref } from './bookRowActions'
 import QuotedName from './QuotedName'
+import { notificationOutcome } from './bookNotificationText'
 
 /**
  * הפעולות על ספרים — מקום אחד לכל הקריאות לשרת, למשוב (הודעה קופצת) ולנעילה לפי ספר.
@@ -60,15 +61,17 @@ export function useBookActions({ setBooks, toast, confirm, router, refresh, onDi
   const setHidden = useCallback(async (book, isHidden, { sendNotification = false, undo = true } = {}) => {
     if (!lock([book.id])) return false
     try {
-      await updateBook(book.id, { isHidden, sendNotification }, isHidden ? 'לא הצלחנו להסתיר את הספר.' : 'לא הצלחנו להציג את הספר.')
+      const data = await updateBook(book.id, { isHidden, sendNotification }, isHidden ? 'לא הצלחנו להסתיר את הספר.' : 'לא הצלחנו להציג את הספר.')
       patchLocal([book.id], { isHidden })
-      const tail = isHidden ? ' הוסתר' : sendNotification ? ' מוצג עכשיו לכולם, והמנויים קיבלו הודעה' : ' מוצג עכשיו לכולם'
+      // ההודעה למנויים נשלחת ברקע מתור בשרת — אומרים מה קרה איתה, לא "קיבלו הודעה"
+      const notice = !isHidden && sendNotification ? notificationOutcome(data?.notification) : null
+      const tail = isHidden ? ' הוסתר' : notice ? ` מוצג עכשיו לכולם, ${notice.text}` : ' מוצג עכשיו לכולם'
       const message = <><QuotedName name={book.name} />{tail}</>
       // "בטל" — רק כשאין מה שאי אפשר להחזיר (הודעה שכבר נשלחה למנויים)
       const action = undo && !sendNotification
         ? { label: 'בטל', undo: true, onClick: () => { setHiddenRef.current(book, !isHidden, { undo: false }) } }
         : undefined
-      toast.show({ message, action })
+      toast.show({ message, action, ...(notice?.problem ? { tone: 'error' } : {}) })
       return true
     } catch (e) {
       fail(e, 'לא הצלחנו לעדכן את הספר.')

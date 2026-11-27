@@ -36,6 +36,7 @@ import BooksHeader, { BOOKS_TITLE_ID } from './BooksHeader'
 import { BooksListSkeleton } from './BooksSkeleton'
 import MergeBooksDialog from './MergeBooksDialog'
 import QuotedName from './QuotedName'
+import { notificationOutcome } from './bookNotificationText'
 import RenameBookDialog from './RenameBookDialog'
 import ShowBookDialog from './ShowBookDialog'
 import { useBookActions } from './useBookActions'
@@ -325,7 +326,15 @@ export default function BooksScreen({ initialBooks, initialCategories, initialEr
       {dialog?.kind === 'add' && (
         <AddBookDialog
           categoryOptions={pickCategoryOptions}
-          onAdded={(name) => { toast.show({ message: <><QuotedName name={name} /> נוסף</> }); refresh() }}
+          onAdded={(name, notification) => {
+            // נשלחה בקשה להודעה למנויים — אומרים מה קרה איתה (התור בשרת, issue #306)
+            const notice = notification ? notificationOutcome(notification) : null
+            toast.show({
+              message: <><QuotedName name={name} /> נוסף{notice ? `, ${notice.text}` : ''}</>,
+              ...(notice?.problem ? { tone: 'error' } : {}),
+            })
+            refresh()
+          }}
           onClose={closeDialog}
         />
       )}
